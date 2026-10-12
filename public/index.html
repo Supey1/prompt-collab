@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PromptCollab</title>
+  <meta name="description" content="Write one AI prompt together in real time, then send it to any model.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <div class="landing">
+    <header>
+      <a class="logo" href="/">
+        <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="5" width="26" height="22" rx="6" fill="currentColor"/><path d="M10 13l4 3-4 3" stroke="var(--paper)" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><rect x="17" y="10" width="2.4" height="12" rx="1.2" fill="#3d6bff"/><rect x="21" y="10" width="2.4" height="12" rx="1.2" fill="#e8457c"/></svg>
+        PromptCollab
+      </a>
+      <button class="icon-btn" id="themeBtn" type="button" aria-label="Toggle dark mode">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      </button>
+    </header>
+
+    <section class="hero">
+      <div>
+        <h1>Write the prompt together. Send it to any model.</h1>
+        <p>Your whole team edits one prompt live, like a shared doc. When it's right, anyone sends it to GPT, Claude, Gemini or hundreds of open models, and everyone watches the answer arrive.</p>
+        <div class="actions">
+          <a class="btn" href="/new">Start a room</a>
+        </div>
+      </div>
+
+      <div class="demo" aria-label="Animated example of two people editing one prompt">
+        <div class="demo-top">
+          <span>Refactor auth middleware</span>
+          <span class="avatars">
+            <span class="avatar" style="--c:#3d6bff" data-active>AK</span>
+            <span class="avatar" style="--c:#e8457c" data-active>BO</span>
+            <span class="avatar" style="--c:#13a57a">JL</span>
+          </span>
+        </div>
+        <div class="demo-body" id="demo"></div>
+        <div class="demo-foot">
+          <span>claude-sonnet-5-5</span>
+          <span id="demoTokens">~0 tokens</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="points">
+      <div>
+        <h2>Live co-editing</h2>
+        <p>See teammates' cursors and edits as they type. No more pasting drafts into Slack and merging feedback by hand.</p>
+      </div>
+      <div>
+        <h2>Any model, one place</h2>
+        <p>Switch between providers from one menu. The whole room sees which model is picked and every reply it gives.</p>
+      </div>
+      <div>
+        <h2>One request, not five</h2>
+        <p>The team agrees on a single prompt before sending, so you spend tokens on one good request instead of several half-finished ones.</p>
+      </div>
+    </section>
+  </div>
+  <script type="module" src="/js/landing.js"></script>
+</body>
+</html>
