@@ -158,7 +158,16 @@ async function handle(m) {
       if (msg) renderMessage(msg);
       break;
     }
-    case 'thread': state.thread = m.thread; renderThread(); break;
+    case 'remove':
+      state.thread = state.thread.filter((x) => x.id !== m.id);
+      renderThread();
+      break;
+    case 'thread':
+      state.thread = m.thread;
+      renderThread();
+      if (m.clearedBy) toast(`${m.clearedBy} cleared the conversation`, { label: 'Undo', onClick: () => send({ type: 'undo-clear' }) });
+      if (m.restoredBy) toast(`${m.restoredBy} brought the conversation back`);
+      break;
     case 'usage': state.usage = m.usage; updateTokens(); break;
     case 'generating': state.generating = m.generating; updateSendButton(); break;
     case 'notice': toast(m.message); break;
@@ -170,6 +179,14 @@ function applyRoom(room) {
   document.title = `${room.name} · PromptCollab`;
   state.model = room.model;
   syncModelSelect();
+  rememberRoom(room);
+}
+
+// Keep a short list of rooms this browser has visited, for the home page.
+function rememberRoom(room) {
+  const recent = (store.get('pc-recent') || []).filter((r) => r.id !== room.id);
+  recent.unshift({ id: room.id, name: room.name, at: Date.now() });
+  store.set('pc-recent', recent.slice(0, 8));
 }
 
 // ---------- people ----------
@@ -301,15 +318,22 @@ function renderMessage(m) {
         Written by <span class="who">${esc(joinNames(authors))}</span></span>
         ${m.sentBy && !(authors.length === 1 && authors[0] === m.sentBy) ? `<span>sent by ${esc(m.sentBy)}</span>` : ''}
       </div>
-      <div class="bubble">${esc(m.content)}</div>`;
+      <div class="bubble">${esc(m.content)}</div>
+      <div class="msg-actions"><button type="button" data-edit="${m.id}">Edit &amp; resend</button></div>`;
   } else {
     const streaming = m.status === 'streaming';
     const u = m.usage;
+    const isLast = state.thread[state.thread.length - 1] === m;
+    const actions = streaming ? '' : `<div class="msg-actions">
+        ${m.content ? `<button type="button" data-copy-msg="${m.id}">Copy</button>` : ''}
+        ${isLast ? `<button type="button" data-regenerate>Regenerate</button>` : ''}
+      </div>`;
     el.innerHTML = `<div class="msg-meta"><span class="model-tag">${esc(labelFor(m.model))}</span></div>
       <div class="body">${renderMarkdown(m.content)}${streaming ? '<span class="cursor-blink" aria-hidden="true"></span>' : ''}</div>
       ${m.status === 'error' ? `<div class="msg-error">The model returned an error: ${esc(m.error)}</div>` : ''}
       ${m.status === 'stopped' ? '<div class="msg-foot">Stopped before finishing.</div>' : ''}
-      ${!streaming && u ? `<div class="msg-foot">${u.estimated ? '~' : ''}${u.input.toLocaleString()} tokens in, ${u.output.toLocaleString()} out</div>` : ''}`;
+      ${!streaming && u ? `<div class="msg-foot">${u.estimated ? '~' : ''}${u.input.toLocaleString()} tokens in, ${u.output.toLocaleString()} out</div>` : ''}
+      ${actions}`;
   }
   scrollDown();
 }
@@ -331,6 +355,17 @@ function scrollDown(force) {
 $('thread').addEventListener('click', async (e) => {
   if (e.target.closest('[data-copy-link]')) return copyLink();
   if (e.target.closest('[data-clear]')) return send({ type: 'clear' });
+  if (e.target.closest('[data-regenerate]')) return send({ type: 'regenerate' });
+  const copyMsg = e.target.closest('[data-copy-msg]');
+  if (copyMsg) {
+    const m = state.thread.find((x) => x.id === copyMsg.dataset.copyMsg);
+    try { await navigator.clipboard.writeText(m.content); copyMsg.textContent = 'Copied'; }
+    catch { copyMsg.textContent = 'Copy failed'; }
+    setTimeout(() => { copyMsg.textContent = 'Copy'; }, 1200);
+    return;
+  }
+  const edit = e.target.closest('[data-edit]');
+  if (edit) return editAndResend(state.thread.find((x) => x.id === edit.dataset.edit));
   const copy = e.target.closest('.copy-code');
   if (copy) {
     await navigator.clipboard?.writeText(copy.parentElement.querySelector('code').textContent);
@@ -338,6 +373,17 @@ $('thread').addEventListener('click', async (e) => {
     setTimeout(() => { copy.textContent = 'Copy'; }, 1200);
   }
 });
+
+// Put an earlier prompt back in the shared editor so the team can tweak it.
+function editAndResend(m) {
+  if (!m) return;
+  const current = promptEd.doc.text;
+  if (current.trim() && current !== m.content && !confirm('Replace what is in the prompt box right now with this earlier prompt?')) return;
+  promptEd.ta.value = m.content;
+  promptEd.onInput(); // sends the change to everyone, like typing it
+  promptEd.focus();
+  promptEd.ta.setSelectionRange(m.content.length, m.content.length);
+}
 
 // ---------- misc ----------
 async function copyLink() {
@@ -353,12 +399,20 @@ $('roomName').addEventListener('input', () => {
 });
 $('roomName').addEventListener('keydown', (e) => { if (e.key === 'Enter') e.target.blur(); });
 
-function toast(text) {
+// A short message at the top of the page, optionally with one button (like Undo).
+function toast(text, action) {
   const t = document.createElement('div');
   t.className = 'toast';
   t.textContent = text;
+  if (action) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = action.label;
+    b.onclick = () => { action.onClick(); t.remove(); };
+    t.appendChild(b);
+  }
   $('toasts').appendChild(t);
-  setTimeout(() => t.remove(), 3200);
+  setTimeout(() => t.remove(), action ? 10000 : 3200);
 }
 
 // ---------- start ----------

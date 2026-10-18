@@ -25,6 +25,7 @@ class Room {
     this.contributors = new Set(saved.contributors || []);
     this.clients = new Map(); // socket -> user
     this.generating = null;   // { controller, messageId, by }
+    this.clearedThread = null; // last cleared conversation, kept so it can be undone
     this.saveTimer = null;
   }
 
@@ -111,14 +112,25 @@ class Room {
         break;
       }
       case 'send': return this.send(socket, user);
+      case 'regenerate': return this.regenerate(socket, user);
       case 'stop': {
         if (this.generating) this.generating.controller.abort();
         break;
       }
       case 'clear': {
-        if (this.generating) return;
+        if (this.generating || !this.thread.length) return;
+        this.clearedThread = this.thread;
         this.thread = [];
-        this.broadcast({ type: 'thread', thread: [] });
+        this.broadcast({ type: 'thread', thread: [], clearedBy: user.name });
+        this.scheduleSave();
+        break;
+      }
+      case 'undo-clear': {
+        // Only restore if nobody has started a new conversation since.
+        if (this.generating || this.thread.length || !this.clearedThread) return;
+        this.thread = this.clearedThread;
+        this.clearedThread = null;
+        this.broadcast({ type: 'thread', thread: this.thread, restoredBy: user.name });
         this.scheduleSave();
         break;
       }
@@ -131,36 +143,56 @@ class Room {
     if (this.generating) return socket.send({ type: 'notice', message: 'A response is already being generated.' });
     const prompt = this.docs.prompt.text.trim();
     if (!prompt) return socket.send({ type: 'notice', message: 'The prompt is empty.' });
-
-    if (!this.model) this.model = (await getCatalog())[0]?.id || null;
-    const resolved = this.model && resolveModel(this.model);
+    const resolved = await this.resolveModel();
     if (!resolved) return socket.send({ type: 'notice', message: 'Pick a model first.' });
 
     const userMsg = {
       id: crypto.randomUUID(), role: 'user', content: prompt, ts: Date.now(),
       sentBy: user.name, authors: [...this.contributors].slice(0, 12),
     };
+    const history = buildHistory(this.thread, prompt);
+    this.thread.push(userMsg);
+    this.clearedThread = null;
+    this.contributors.clear();
+    this.broadcast({ type: 'append', messages: [userMsg] });
+    // Clear the shared prompt for everyone, as a normal edit so OT stays consistent.
+    const cleared = this.docs.prompt.set('');
+    if (cleared) this.broadcast({ type: 'op', field: 'prompt', op: cleared.op, rev: cleared.rev, by: null });
+
+    return this.respond(user, resolved, history);
+  }
+
+  // Throw away the last reply and ask the room's current model again.
+  async regenerate(socket, user) {
+    if (this.generating) return socket.send({ type: 'notice', message: 'A response is already being generated.' });
+    const last = this.thread[this.thread.length - 1];
+    const prev = this.thread[this.thread.length - 2];
+    if (last?.role !== 'assistant' || prev?.role !== 'user') return;
+    const resolved = await this.resolveModel();
+    if (!resolved) return socket.send({ type: 'notice', message: 'Pick a model first.' });
+
+    this.thread.pop();
+    this.broadcast({ type: 'remove', id: last.id });
+    return this.respond(user, resolved, buildHistory(this.thread.slice(0, -1), prev.content));
+  }
+
+  async resolveModel() {
+    if (!this.model) this.model = (await getCatalog())[0]?.id || null;
+    return this.model && resolveModel(this.model);
+  }
+
+  // Stream a model reply to `history` into the thread, for everyone in the room.
+  async respond(user, resolved, history) {
     const reply = {
       id: crypto.randomUUID(), role: 'assistant', content: '', ts: Date.now(),
       model: this.model, status: 'streaming',
     };
-    const history = this.thread
-      .filter((m) => m.role === 'user' || (m.role === 'assistant' && m.status === 'done' && m.content))
-      .map((m) => ({ role: m.role, content: m.content }));
-    // Providers want strictly alternating turns; drop a dangling user turn.
-    if (history.length && history[history.length - 1].role === 'user') history.pop();
-    history.push({ role: 'user', content: prompt });
-
-    this.thread.push(userMsg, reply);
-    this.contributors.clear();
+    this.thread.push(reply);
     const controller = new AbortController();
     this.generating = { controller, messageId: reply.id, by: user.name };
 
-    this.broadcast({ type: 'append', messages: [userMsg, reply] });
+    this.broadcast({ type: 'append', messages: [reply] });
     this.broadcast({ type: 'generating', generating: { messageId: reply.id, by: user.name } });
-    // Clear the shared prompt for everyone, as a normal edit so OT stays consistent.
-    const cleared = this.docs.prompt.set('');
-    if (cleared) this.broadcast({ type: 'op', field: 'prompt', op: cleared.op, rev: cleared.rev, by: null });
 
     const system = this.docs.system.text.trim();
     let pending = '';
@@ -188,7 +220,6 @@ class Room {
       clearTimeout(flushTimer);
       flush();
       if (!reply.usage) reply.usage = { input: Math.round(history.reduce((n, m) => n + m.content.length, system.length) / 4), output: Math.round(reply.content.length / 4), estimated: true };
-      if (reply.status === 'stopped' && !reply.content) reply.status = 'stopped';
       this.usage.input += reply.usage.input;
       this.usage.output += reply.usage.output;
       this.usage.requests++;
@@ -224,9 +255,25 @@ class Room {
   }
 }
 
+// The conversation as the model sees it: earlier turns from `thread`, then `prompt`.
+function buildHistory(thread, prompt) {
+  const history = thread
+    .filter((m) => m.role === 'user' || (m.role === 'assistant' && m.status === 'done' && m.content))
+    .map((m) => ({ role: m.role, content: m.content }));
+  // Providers want strictly alternating turns; drop a dangling user turn.
+  if (history.length && history[history.length - 1].role === 'user') history.pop();
+  history.push({ role: 'user', content: prompt });
+  return history;
+}
+
 function validOp(op) {
   return op.every((c) => c && typeof c.p === 'number' && c.p >= 0 &&
     ((c.t === 'i' && typeof c.s === 'string') || (c.t === 'd' && typeof c.n === 'number' && c.n > 0)));
+}
+
+// True if a room is open right now or was saved earlier.
+export function roomExists(id) {
+  return rooms.has(id) || fs.existsSync(path.join(DATA_DIR, `${id}.json`));
 }
 
 export function getRoom(id) {

@@ -26,6 +26,7 @@
         <p>Your whole team edits one prompt live, like a shared doc. When it's right, anyone sends it to GPT, Claude, Gemini or hundreds of open models, and everyone watches the answer arrive.</p>
         <div class="actions">
           <a class="btn" href="/new">Start a room</a>
+          <button class="btn ghost" id="joinBtn" type="button">Join a room</button>
         </div>
       </div>
 
@@ -46,6 +47,11 @@
       </div>
     </section>
 
+    <section class="recent" id="recent" hidden>
+      <h2>Your recent rooms</h2>
+      <ul id="recentList"></ul>
+    </section>
+
     <section class="points">
       <div>
         <h2>Live co-editing</h2>
@@ -61,6 +67,19 @@
       </div>
     </section>
   </div>
+  <dialog id="joinDialog">
+    <form id="joinForm" novalidate>
+      <h2>Join a room</h2>
+      <p>Paste the invite link a teammate sent you, or type the room code.</p>
+      <input type="text" id="joinInput" required autocomplete="off" spellcheck="false" placeholder="https://…/r/k3x9qm2a or k3x9qm2a" aria-describedby="joinError">
+      <p class="form-error" id="joinError" aria-live="polite"></p>
+      <div class="dialog-actions">
+        <button class="btn ghost" type="button" id="joinCancel">Cancel</button>
+        <button class="btn" type="submit">Join</button>
+      </div>
+    </form>
+  </dialog>
+
   <script type="module" src="/js/landing.js"></script>
 </body>
 </html>

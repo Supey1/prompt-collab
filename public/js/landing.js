@@ -3,6 +3,51 @@ import { estimateTokens } from '../shared/ot.js';
 
 bindThemeToggle(document.getElementById('themeBtn'));
 
+// "Join a room": accept a full invite link or just the room code.
+const joinDialog = document.getElementById('joinDialog');
+const joinInput = document.getElementById('joinInput');
+const joinError = document.getElementById('joinError');
+document.getElementById('joinBtn').addEventListener('click', () => {
+  joinError.textContent = '';
+  joinInput.value = '';
+  joinDialog.showModal();
+});
+document.getElementById('joinCancel').addEventListener('click', () => joinDialog.close());
+document.getElementById('joinForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const raw = joinInput.value.trim();
+  // Take the part after "/r/" if it's a link, otherwise use the text as the code.
+  const id = (raw.match(/\/r\/([^/?#\s]+)/)?.[1] || raw).toLowerCase();
+  if (!raw) return (joinError.textContent = 'Paste a link or type a room code.');
+  if (!/^[a-z0-9-]{3,40}$/.test(id)) return (joinError.textContent = "That doesn't look like a room link or code.");
+  joinError.textContent = 'Checking…';
+  try {
+    const { exists } = await (await fetch(`/api/rooms/${encodeURIComponent(id)}`)).json();
+    if (!exists) return (joinError.textContent = 'No room found with that code. Check it with whoever invited you.');
+  } catch {
+    return (joinError.textContent = "Couldn't reach the server. Try again.");
+  }
+  location.href = `/r/${id}`;
+});
+
+// Rooms this browser has opened before (saved by room.js), newest first.
+function showRecentRooms() {
+  let recent = [];
+  try { recent = JSON.parse(localStorage.getItem('pc-recent')) || []; } catch { /* storage blocked */ }
+  if (!recent.length) return;
+  const ago = (t) => {
+    const min = Math.round((Date.now() - t) / 60000);
+    if (min < 1) return 'just now';
+    if (min < 60) return `${min} min ago`;
+    if (min < 60 * 24) return `${Math.round(min / 60)} h ago`;
+    return `${Math.round(min / 60 / 24)} days ago`;
+  };
+  document.getElementById('recentList').innerHTML = recent.map((r) =>
+    `<li><a href="/r/${encodeURIComponent(r.id)}">${esc(r.name || 'Untitled prompt')}</a><span>${ago(r.at)}</span></li>`
+  ).join('');
+  document.getElementById('recent').hidden = false;
+}
+
 // Scripted demo: two teammates co-writing one prompt.
 const el = document.getElementById('demo');
 const tokens = document.getElementById('demoTokens');
@@ -67,4 +112,5 @@ async function run() {
     await wait(4000);
   }
 }
+showRecentRooms();
 run();
