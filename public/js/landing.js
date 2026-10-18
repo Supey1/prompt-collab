@@ -3,6 +3,33 @@ import { estimateTokens } from '../shared/ot.js';
 
 bindThemeToggle(document.getElementById('themeBtn'));
 
+// "Join a room": accept a full invite link or just the room code.
+const joinDialog = document.getElementById('joinDialog');
+const joinInput = document.getElementById('joinInput');
+const joinError = document.getElementById('joinError');
+document.getElementById('joinBtn').addEventListener('click', () => {
+  joinError.textContent = '';
+  joinInput.value = '';
+  joinDialog.showModal();
+});
+document.getElementById('joinCancel').addEventListener('click', () => joinDialog.close());
+document.getElementById('joinForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const raw = joinInput.value.trim();
+  // Take the part after "/r/" if it's a link, otherwise use the text as the code.
+  const id = (raw.match(/\/r\/([^/?#\s]+)/)?.[1] || raw).toLowerCase();
+  if (!raw) return (joinError.textContent = 'Paste a link or type a room code.');
+  if (!/^[a-z0-9-]{3,40}$/.test(id)) return (joinError.textContent = "That doesn't look like a room link or code.");
+  joinError.textContent = 'Checking…';
+  try {
+    const { exists } = await (await fetch(`/api/rooms/${encodeURIComponent(id)}`)).json();
+    if (!exists) return (joinError.textContent = 'No room found with that code. Check it with whoever invited you.');
+  } catch {
+    return (joinError.textContent = "Couldn't reach the server. Try again.");
+  }
+  location.href = `/r/${id}`;
+});
+
 // Rooms this browser has opened before (saved by room.js), newest first.
 function showRecentRooms() {
   let recent = [];

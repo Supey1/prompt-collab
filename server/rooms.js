@@ -271,6 +271,11 @@ function validOp(op) {
     ((c.t === 'i' && typeof c.s === 'string') || (c.t === 'd' && typeof c.n === 'number' && c.n > 0)));
 }
 
+// True if a room is open right now or was saved earlier.
+export function roomExists(id) {
+  return rooms.has(id) || fs.existsSync(path.join(DATA_DIR, `${id}.json`));
+}
+
 export function getRoom(id) {
   let room = rooms.get(id);
   if (room) return room;

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { attachWebSocket } from './ws.js';
-import { getRoom, newRoomId, validRoomId, saveAll } from './rooms.js';
+import { getRoom, roomExists, newRoomId, validRoomId, saveAll } from './rooms.js';
 import { getCatalog } from './providers.js';
 
 loadDotEnv();
@@ -30,6 +30,10 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/models') {
       const models = await getCatalog({ refresh: url.searchParams.has('refresh') });
       return json(res, { models });
+    }
+    if (p.startsWith('/api/rooms/')) {
+      const id = p.slice('/api/rooms/'.length);
+      return json(res, { exists: validRoomId(id) && roomExists(id) });
     }
     if (p === '/api/config') return json(res, { accessCodeRequired: !!ACCESS_CODE });
     if (p === '/healthz') return json(res, { ok: true });

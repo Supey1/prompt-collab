@@ -241,6 +241,7 @@ dialog input[type=text], dialog input[type=password] { width: 100%; padding: 10p
 .swatches { display: flex; gap: 8px; margin: 14px 0 20px; }
 .swatch { width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; background: var(--c); cursor: pointer; }
 .swatch[aria-checked="true"] { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--c); }
+.form-error { color: var(--danger); font-size: 14px; min-height: 1.5em; margin: 8px 0 12px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
 @media (max-width: 640px) {
