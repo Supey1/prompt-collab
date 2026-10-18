@@ -95,6 +95,15 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .points { grid-template-columns: 1fr; gap: 24px; }
 }
 
+.recent { margin-bottom: 40px; }
+.recent[hidden] { display: none; }
+.recent h2 { font-size: 18px; margin: 0 0 10px; }
+.recent ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-width: 520px; }
+.recent li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.recent a { color: var(--ink); font-weight: 600; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recent a:hover { text-decoration: underline; }
+.recent span { color: var(--ink-3); font-size: 14px; flex-shrink: 0; }
+
 /* ---------- people: avatars, carets ---------- */
 .avatars { display: flex; align-items: center; }
 .avatar {
@@ -174,6 +183,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 @keyframes blink { 50% { opacity: 0; } }
 .msg-error { color: var(--danger); font-size: 14px; margin-top: 8px; }
 .msg-foot { font-size: 12px; color: var(--ink-3); margin-top: 8px; }
+.msg-actions { display: flex; gap: 4px; margin-top: 6px; }
+.msg-actions button { border: 0; background: none; cursor: pointer; color: var(--ink-3); font-size: 13px; padding: 4px 8px; border-radius: 6px; margin-left: -8px; margin-right: 8px; }
+.msg-actions button:hover { background: var(--wash); color: var(--ink); }
 
 /* composer */
 .composer-wrap { padding: 0 24px 18px; }
@@ -219,6 +231,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* toasts + dialogs */
 .toasts { position: fixed; left: 50%; top: 64px; transform: translateX(-50%); display: grid; gap: 8px; z-index: 50; }
 .toast { background: var(--btn); color: var(--btn-text); padding: 8px 14px; border-radius: 999px; font-size: 14px; box-shadow: var(--shadow); animation: pop .18s ease-out; }
+.toast button { margin-left: 12px; border: 0; background: none; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 0; }
 @keyframes pop { from { transform: translateY(-6px); opacity: 0; } }
 dialog { border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--panel); color: var(--ink); padding: 24px; width: min(420px, calc(100vw - 32px)); box-shadow: var(--shadow); }
 dialog::backdrop { background: rgba(18, 23, 34, .45); }

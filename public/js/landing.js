@@ -3,6 +3,24 @@ import { estimateTokens } from '../shared/ot.js';
 
 bindThemeToggle(document.getElementById('themeBtn'));
 
+// Rooms this browser has opened before (saved by room.js), newest first.
+function showRecentRooms() {
+  let recent = [];
+  try { recent = JSON.parse(localStorage.getItem('pc-recent')) || []; } catch { /* storage blocked */ }
+  if (!recent.length) return;
+  const ago = (t) => {
+    const min = Math.round((Date.now() - t) / 60000);
+    if (min < 1) return 'just now';
+    if (min < 60) return `${min} min ago`;
+    if (min < 60 * 24) return `${Math.round(min / 60)} h ago`;
+    return `${Math.round(min / 60 / 24)} days ago`;
+  };
+  document.getElementById('recentList').innerHTML = recent.map((r) =>
+    `<li><a href="/r/${encodeURIComponent(r.id)}">${esc(r.name || 'Untitled prompt')}</a><span>${ago(r.at)}</span></li>`
+  ).join('');
+  document.getElementById('recent').hidden = false;
+}
+
 // Scripted demo: two teammates co-writing one prompt.
 const el = document.getElementById('demo');
 const tokens = document.getElementById('demoTokens');
@@ -67,4 +85,5 @@ async function run() {
     await wait(4000);
   }
 }
+showRecentRooms();
 run();
