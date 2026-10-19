@@ -1,5 +1,6 @@
 import http from 'node:http';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { attachWebSocket } from './ws.js';
@@ -35,7 +36,7 @@ const server = http.createServer(async (req, res) => {
       const id = p.slice('/api/rooms/'.length);
       return json(res, { exists: validRoomId(id) && roomExists(id) });
     }
-    if (p === '/api/config') return json(res, { accessCodeRequired: !!ACCESS_CODE });
+    if (p === '/api/config') return json(res, { accessCodeRequired: !!ACCESS_CODE, lanUrls: lanUrls() });
     if (p === '/healthz') return json(res, { ok: true });
 
     const file = path.normalize(path.join(ROOT, p === '/' ? 'index.html' : p));
@@ -69,6 +70,7 @@ attachWebSocket(server, '/ws', (socket, _req, url) => {
 
 server.listen(PORT, () => {
   console.log(`PromptCollab running at http://localhost:${PORT}`);
+  for (const url of lanUrls()) console.log(`  On your network:   ${url}`);
   getCatalog().then((m) => {
     const providers = [...new Set(m.map((x) => x.providerLabel))];
     console.log(`Models available from: ${providers.join(', ')}`);
@@ -93,6 +95,12 @@ function sendFile(res, file) {
     });
     res.end(data);
   });
+}
+// Addresses other devices on the same Wi-Fi/network can use to reach this server.
+function lanUrls() {
+  return Object.values(os.networkInterfaces()).flat()
+    .filter((a) => a && a.family === 'IPv4' && !a.internal)
+    .map((a) => `http://${a.address}:${PORT}`);
 }
 function json(res, obj) {
   res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(obj));

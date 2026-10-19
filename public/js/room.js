@@ -359,8 +359,7 @@ $('thread').addEventListener('click', async (e) => {
   const copyMsg = e.target.closest('[data-copy-msg]');
   if (copyMsg) {
     const m = state.thread.find((x) => x.id === copyMsg.dataset.copyMsg);
-    try { await navigator.clipboard.writeText(m.content); copyMsg.textContent = 'Copied'; }
-    catch { copyMsg.textContent = 'Copy failed'; }
+    copyMsg.textContent = (await copyText(m.content)) ? 'Copied' : 'Copy failed';
     setTimeout(() => { copyMsg.textContent = 'Copy'; }, 1200);
     return;
   }
@@ -368,8 +367,7 @@ $('thread').addEventListener('click', async (e) => {
   if (edit) return editAndResend(state.thread.find((x) => x.id === edit.dataset.edit));
   const copy = e.target.closest('.copy-code');
   if (copy) {
-    await navigator.clipboard?.writeText(copy.parentElement.querySelector('code').textContent);
-    copy.textContent = 'Copied';
+    copy.textContent = (await copyText(copy.parentElement.querySelector('code').textContent)) ? 'Copied' : 'Copy failed';
     setTimeout(() => { copy.textContent = 'Copy'; }, 1200);
   }
 });
@@ -386,9 +384,36 @@ function editAndResend(m) {
 }
 
 // ---------- misc ----------
+// Browsers only allow navigator.clipboard on https:// or localhost. On a plain
+// http:// network address (like http://192.168.1.23:3000) fall back to the
+// older copy command, which still works there.
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch { /* fall back */ }
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;opacity:0';
+  document.body.appendChild(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch { /* not allowed */ }
+  ta.remove();
+  return ok;
+}
+
+// A localhost link only works on this computer, so invite with the network address instead.
+async function inviteLink() {
+  if (!['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)) return location.href;
+  try {
+    const { lanUrls } = await (await fetch('/api/config')).json();
+    if (lanUrls?.length) return lanUrls[0] + location.pathname;
+  } catch { /* use localhost */ }
+  return location.href;
+}
+
 async function copyLink() {
-  try { await navigator.clipboard.writeText(location.href); toast('Invite link copied'); }
-  catch { toast(location.href); }
+  const link = await inviteLink();
+  if (await copyText(link)) toast(link.includes('localhost') ? 'Invite link copied (works on this computer only)' : 'Invite link copied');
+  else toast(link);
 }
 $('shareBtn').addEventListener('click', copyLink);
 

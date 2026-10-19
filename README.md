@@ -18,6 +18,19 @@ Open http://localhost:3000 and click **Start a room**. To try the collaboration 
 
 Without API keys the app runs in **demo mode**: a built-in stand-in model replies, so you can try the collaboration before setting anything up.
 
+## Use it on your home network
+
+The server already accepts connections from other devices on the same Wi-Fi. When it starts, it prints the address to share:
+
+```
+PromptCollab running at http://localhost:3000
+  On your network:   http://192.168.1.23:3000
+```
+
+Open that address on another phone or laptop on the same network. **Copy invite link** uses the network address automatically, even when you opened the app as `localhost`.
+
+If other devices can't connect, your computer's firewall is probably blocking Node.js. On Windows, allow Node.js on **Private** networks when asked, or under *Windows Defender Firewall → Allow an app*. On macOS, allow incoming connections for `node` under *System Settings → Network → Firewall → Options*.
+
 ## Add real models
 
 Copy `.env.example` to `.env`, fill in any keys you have, and restart:
