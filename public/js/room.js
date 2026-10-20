@@ -384,36 +384,49 @@ function editAndResend(m) {
 }
 
 // ---------- misc ----------
-// Browsers only allow navigator.clipboard on https:// or localhost. On a plain
-// http:// network address (like http://192.168.1.23:3000) fall back to the
-// older copy command, which still works there.
-async function copyText(text) {
-  try { await navigator.clipboard.writeText(text); return true; } catch { /* fall back */ }
+// Copy text to the clipboard. Browsers (Safari especially) only allow this
+// right after a click, so nothing here waits on the network first. The older
+// execCommand copy goes first because it also works on plain http://
+// network addresses, where navigator.clipboard doesn't exist.
+function copyText(text) {
   const ta = document.createElement('textarea');
   ta.value = text;
-  ta.style.cssText = 'position:fixed;opacity:0';
+  ta.setAttribute('readonly', '');
+  ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;font-size:16px';
+  const focused = document.activeElement;
   document.body.appendChild(ta);
   ta.select();
+  ta.setSelectionRange(0, text.length); // iOS Safari ignores select()
   let ok = false;
   try { ok = document.execCommand('copy'); } catch { /* not allowed */ }
   ta.remove();
-  return ok;
+  focused?.focus?.();
+  if (ok) return Promise.resolve(true);
+  if (!navigator.clipboard) return Promise.resolve(false);
+  return navigator.clipboard.writeText(text).then(() => true, () => false);
 }
 
-// A localhost link only works on this computer, so invite with the network address instead.
-async function inviteLink() {
-  if (!['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)) return location.href;
-  try {
-    const { lanUrls } = await (await fetch('/api/config')).json();
-    if (lanUrls?.length) return lanUrls[0] + location.pathname;
-  } catch { /* use localhost */ }
+// A localhost link only works on this computer, so invites use the network
+// address instead. Looked up when the page loads, so copying stays instant.
+let networkUrl = null;
+const onThisComputerOnly = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+if (onThisComputerOnly) {
+  fetch('/api/config').then((r) => r.json()).then((c) => { networkUrl = c.lanUrls?.[0] || null; }).catch(() => {});
+}
+
+function inviteLink() {
+  if (onThisComputerOnly && networkUrl) return networkUrl + location.pathname;
   return location.href;
 }
 
 async function copyLink() {
-  const link = await inviteLink();
-  if (await copyText(link)) toast(link.includes('localhost') ? 'Invite link copied (works on this computer only)' : 'Invite link copied');
-  else toast(link);
+  const link = inviteLink();
+  if (!(await copyText(link))) {
+    prompt('Copying was blocked by the browser. Copy this invite link:', link);
+    return;
+  }
+  const localOnly = onThisComputerOnly && !networkUrl;
+  toast(localOnly ? `Copied ${link} (only works on this computer)` : `Invite link copied: ${link}`);
 }
 $('shareBtn').addEventListener('click', copyLink);
 
