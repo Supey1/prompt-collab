@@ -96,10 +96,18 @@ function sendFile(res, file) {
     res.end(data);
   });
 }
-// Addresses other devices on the same Wi-Fi/network can use to reach this server.
+// Addresses other devices on the same Wi-Fi/network can use to reach this server,
+// best guess first. Virtual adapters (WSL, Docker, VMs, VPNs) usually can't be
+// reached by other devices, so they go last.
+const VIRTUAL = /vethernet|wsl|hyper-v|docker|veth|br-|virbr|vbox|virtualbox|vmware|vmnet|utun|tun|tap|tailscale|zerotier|bridge/i;
 function lanUrls() {
-  return Object.values(os.networkInterfaces()).flat()
-    .filter((a) => a && a.family === 'IPv4' && !a.internal)
+  const score = ({ name, address }) =>
+    (VIRTUAL.test(name) ? 10 : 0) +
+    (address.startsWith('192.168.') ? 0 : address.startsWith('10.') ? 1 : /^172\.(1[6-9]|2\d|3[01])\./.test(address) ? 2 : 3);
+  return Object.entries(os.networkInterfaces())
+    .flatMap(([name, addrs]) => addrs.map((a) => ({ ...a, name })))
+    .filter((a) => a.family === 'IPv4' && !a.internal && !a.address.startsWith('169.254.'))
+    .sort((a, b) => score(a) - score(b))
     .map((a) => `http://${a.address}:${PORT}`);
 }
 function json(res, obj) {
