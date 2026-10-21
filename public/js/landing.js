@@ -1,7 +1,27 @@
 import { bindThemeToggle } from './theme.js';
 import { estimateTokens } from '../shared/ot.js';
+import { avatarContent } from './avatar.js';
 
 bindThemeToggle(document.getElementById('themeBtn'));
+
+// Header: Sign in / Sign up buttons, or who you're signed in as.
+showAccount();
+async function showAccount() {
+  const el = document.getElementById('account');
+  let user = null;
+  try { ({ user } = await (await fetch('/api/me')).json()); } catch { /* offline: show sign-in buttons */ }
+  if (!user) {
+    el.innerHTML = '<a class="btn ghost small" href="/signin">Sign in</a><a class="btn small" href="/signup">Sign up</a>';
+    return;
+  }
+  el.innerHTML = `<span class="avatar" style="--c:${user.color};margin:0">${avatarContent(user)}</span>
+    <span class="name" title="@${esc(user.username)}">${esc(user.displayName)}</span>
+    <button class="btn ghost small" type="button" id="signOut">Sign out</button>`;
+  document.getElementById('signOut').addEventListener('click', async () => {
+    await fetch('/api/signout', { method: 'POST' }).catch(() => {});
+    location.reload();
+  });
+}
 
 // "Join a room": accept a full invite link or just the room code.
 const joinDialog = document.getElementById('joinDialog');
