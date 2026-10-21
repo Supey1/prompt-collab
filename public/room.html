@@ -15,6 +15,7 @@
         <span>PromptCollab</span>
       </a>
       <input class="room-name" id="roomName" aria-label="Room name" value="Untitled prompt" maxlength="80">
+      <span class="access-tag" id="accessTag" hidden></span>
       <div class="spacer"></div>
       <span class="status" id="status" data-state="connecting"><span>Connecting</span></span>
       <div class="avatars" id="avatars" aria-label="People in this room"></div>
@@ -56,7 +57,62 @@
     </div>
   </div>
 
+  <!-- Shown instead of the room when you can't enter it. -->
+  <div class="gate" id="gate" hidden>
+    <div class="auth-card gate-card">
+      <span class="gate-icon" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>
+      <h1 id="gateTitle"></h1>
+      <p id="gateText"></p>
+      <p class="form-ok" id="gateOk" role="status"></p>
+      <div class="gate-actions" id="gateActions"></div>
+    </div>
+  </div>
+
   <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <!-- The host's Share panel, like Google Docs. -->
+  <dialog id="shareDialog" class="share-dialog" aria-labelledby="shareTitle">
+    <div class="share-head">
+      <h2 id="shareTitle">Share this room</h2>
+      <button class="icon-btn" id="shareClose" type="button" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <form id="shareAddForm" class="inline-form" novalidate>
+      <label class="visually-hidden" for="shareUsername">Add people by username</label>
+      <input id="shareUsername" type="text" placeholder="Add people by username" autocapitalize="off" spellcheck="false" autocomplete="off">
+      <button class="btn" type="submit">Add</button>
+    </form>
+    <div class="chips" id="shareContacts"></div>
+
+    <div id="shareRequestsBlock" hidden>
+      <h3>Asking to join</h3>
+      <ul class="people" id="shareRequests"></ul>
+    </div>
+    <h3>People with access</h3>
+    <ul class="people" id="sharePeople"></ul>
+    <div id="shareRemovedBlock" hidden>
+      <h3>Removed</h3>
+      <ul class="people" id="shareRemoved"></ul>
+    </div>
+
+    <h3>General access</h3>
+    <div class="access-row">
+      <span class="access-icon" id="accessIcon" aria-hidden="true"></span>
+      <div>
+        <label class="visually-hidden" for="accessSelect">Who can open this room</label>
+        <select id="accessSelect" class="model-select">
+          <option value="restricted">Restricted</option>
+          <option value="open">Anyone with the link</option>
+        </select>
+        <p class="hint" id="accessHint"></p>
+      </div>
+    </div>
+    <div class="share-foot">
+      <button class="btn ghost" id="shareCopy" type="button">Copy link</button>
+      <button class="btn" id="shareDone" type="button">Done</button>
+    </div>
+  </dialog>
 
   <dialog id="codeDialog">
     <form method="dialog" id="codeForm">

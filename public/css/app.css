@@ -102,7 +102,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .recent li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .recent a { color: var(--ink); font-weight: 600; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .recent a:hover { text-decoration: underline; }
-.recent span { color: var(--ink-3); font-size: 14px; flex-shrink: 0; }
+.recent li > span { color: var(--ink-3); font-size: 14px; flex-shrink: 0; }
+.recent .room-line { display: flex; flex-direction: column; min-width: 0; flex-shrink: 1; }
+.recent .room-meta { color: var(--ink-3); font-size: 13px; }
+.recent ul { max-width: 640px; }
 
 /* ---------- people: avatars, carets ---------- */
 .avatars { display: flex; align-items: center; }
@@ -140,6 +143,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .room-name {
   border: 1px solid transparent; background: transparent; border-radius: var(--r-sm);
   padding: 4px 8px; font-weight: 600; font-size: 16px; min-width: 0; width: min(36ch, 40vw);
+}
+/* Shrink the name box to its text where supported, so the access label sits beside it. */
+@supports (field-sizing: content) {
+  .room-name { field-sizing: content; width: auto; max-width: min(36ch, 40vw); min-width: 8ch; }
 }
 .room-name:hover { border-color: var(--line); }
 .room-name:focus { border-color: var(--ink-3); outline: none; }
@@ -298,7 +305,59 @@ dialog input[type=text], dialog input[type=password] { width: 100%; padding: 10p
 .auth-switch { text-align: center; margin: 20px 0 0; color: var(--ink-2); font-size: 14px; }
 .auth-switch a { font-weight: 600; }
 
+/* account page */
+.account-page { max-width: 560px; margin: 32px auto 0; }
+.account-page > h1 { margin: 0 0 4px; font-size: 32px; letter-spacing: -.02em; }
+.account-page .auth-card { max-width: none; margin: 0 0 20px; }
+.account-page .check { display: flex; width: fit-content; }
+.auth-card h2 { margin: 0 0 16px; font-size: 20px; letter-spacing: -.01em; }
+.auth-card h3 { margin: 22px 0 8px; font-size: 14px; color: var(--ink-2); }
+.form-ok { color: #13a57a; font-size: 14px; margin: 0 0 12px; }
+.form-ok:empty { display: none; }
+.inline-form { display: flex; gap: 8px; margin-bottom: 10px; }
+.inline-form input { flex: 1; min-width: 0; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--paper); }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.people { list-style: none; margin: 0; padding: 0; }
+.people li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.people li:last-child { border-bottom: 0; }
+.people .avatar { margin: 0; flex: none; }
+.people .who { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+.people .who strong { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.people .who span { font-size: 13px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.people .actions { display: flex; gap: 6px; flex: none; }
+.people .tag { font-size: 12px; color: var(--ink-3); flex: none; }
+.people .empty-row { color: var(--ink-3); font-size: 14px; }
+.online-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #2fbf71; margin-left: 4px; vertical-align: middle; }
+
+/* room: access label, no-access screen, Share panel */
+.room[hidden], .gate[hidden] { display: none; }
+.access-tag { font-size: 12px; font-weight: 600; color: var(--ink-2); background: var(--wash); border-radius: 999px; padding: 3px 10px; white-space: nowrap; }
+.gate { min-height: 100%; display: grid; place-items: center; padding: 24px 16px; }
+.gate-card { margin: 0; text-align: center; max-width: 420px; }
+.gate-card h1 { font-size: 24px; }
+.gate-card p { color: var(--ink-2); }
+.gate-icon { display: inline-grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; background: var(--wash); color: var(--ink-2); margin-bottom: 12px; }
+.gate-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 18px; }
+.share-dialog { width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow-y: auto; }
+.share-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
+.share-head h2 { margin: 0; font-size: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.share-dialog h3 { margin: 18px 0 6px; font-size: 14px; color: var(--ink-2); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chips:empty { display: none; }
+.chips-label { font-size: 13px; color: var(--ink-3); margin-right: 2px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 2px 10px 2px 2px; font-size: 13px; cursor: pointer; }
+.chip:hover { background: var(--wash); }
+.chip .avatar { width: 22px; height: 22px; font-size: 11px; margin: 0; border-width: 0; }
+.access-row { display: flex; gap: 12px; align-items: flex-start; }
+.access-row .hint { margin-top: 4px; }
+.access-icon { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; flex: none; background: var(--wash); color: var(--ink-2); }
+.access-icon[data-access="open"] { background: color-mix(in srgb, #13a57a 18%, transparent); color: #13a57a; }
+.share-foot { display: flex; justify-content: space-between; gap: 8px; margin-top: 22px; }
+
 /* account area in headers */
+.account a.me { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; border-radius: 999px; padding: 2px 10px 2px 2px; position: relative; }
+.account a.me:hover { background: var(--wash); }
+.badge { position: absolute; top: -2px; left: 20px; min-width: 16px; height: 16px; border-radius: 8px; background: var(--danger); color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; padding: 0 4px; border: 2px solid var(--paper); }
 .account { display: inline-flex; align-items: center; gap: 10px; }
 .account .name { font-weight: 600; font-size: 15px; max-width: 14em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .header-right { display: inline-flex; align-items: center; gap: 8px; }
@@ -308,8 +367,11 @@ dialog input[type=text], dialog input[type=password] { width: 100%; padding: 10p
   .auth-page { padding: 16px 16px 48px; }
   .auth-card { margin-top: 24px; padding: 20px; }
   .account .name { display: none; }
+  .access-tag { display: none; }
+  .share-dialog .people .tag { display: none; }
   .topbar { padding: 8px 12px; gap: 8px; }
-  .topbar .logo span, .status span, #shareBtn { display: none; }
+  .topbar .logo span, .status span { display: none; }
+  #shareBtn { padding: 6px 10px; }
   .room-name { width: auto; flex: 1; }
   .topbar .spacer { display: none; }
   .composer-foot .kbd + .btn, .composer-foot .btn { margin-left: auto; }

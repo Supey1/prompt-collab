@@ -16,7 +16,9 @@ const state = {
   ws: null, me: null, users: [], models: [], model: null,
   generating: null, thread: [], usage: { input: 0, output: 0, requests: 0 },
   connected: false, retry: 0,
+  account: null, room: null, share: null, // you, the room's sharing settings, the host's Share panel
 };
+const isHost = () => state.account && state.room && state.account.id === state.room.owner;
 
 bindThemeToggle($('themeBtn'));
 
@@ -89,6 +91,11 @@ async function handle(m) {
     case 'signin':
       state.ws.onclose = null; state.ws.close();
       return toSignIn();
+    case 'denied': // not allowed in, or the host just removed you
+      state.ws.onclose = null; state.ws.close();
+      $('shareDialog').close();
+      return showGate(m.reason, m.hostName, m.message);
+    case 'share': state.share = m; renderShare(); break;
     case 'auth':
       state.ws.onclose = null; state.ws.close();
       await askCode();
@@ -96,6 +103,7 @@ async function handle(m) {
     case 'init':
       state.connected = true; state.retry = 0; setStatus('online');
       state.me = m.you;
+      state.account = m.account;
       state.thread = m.thread; state.usage = m.usage; state.generating = m.generating;
       applyRoom(m.room);
       promptEd.reset(m.docs.prompt.text, m.docs.prompt.rev);
@@ -119,9 +127,12 @@ async function handle(m) {
       break;
     }
     case 'room': {
-      const prev = state.model;
+      const prev = state.room;
       applyRoom(m.room);
-      if (m.by && prev && prev !== m.room.model) toast(`${m.by} switched the model to ${labelFor(m.room.model)}`);
+      if (m.by && prev?.model && prev.model !== m.room.model) toast(`${m.by} switched the model to ${labelFor(m.room.model)}`);
+      if (prev && prev.access !== m.room.access && !isHost()) {
+        toast(m.room.access === 'open' ? `${m.room.hostName} opened this room to anyone with the link` : `${m.room.hostName} made this room restricted`);
+      }
       break;
     }
     case 'append':
@@ -156,18 +167,17 @@ async function handle(m) {
 }
 
 function applyRoom(room) {
+  state.room = room;
   if (document.activeElement !== $('roomName')) $('roomName').value = room.name;
   document.title = `${room.name} · PromptCollab`;
   state.model = room.model;
   syncModelSelect();
-  rememberRoom(room);
-}
-
-// Keep a short list of rooms this browser has visited, for the home page.
-function rememberRoom(room) {
-  const recent = (store.get('pc-recent') || []).filter((r) => r.id !== room.id);
-  recent.unshift({ id: room.id, name: room.name, at: Date.now() });
-  store.set('pc-recent', recent.slice(0, 8));
+  const tag = $('accessTag');
+  tag.hidden = false;
+  tag.textContent = room.access === 'open' ? 'Anyone with the link' : 'Restricted';
+  tag.title = isHost() ? 'You host this room' : `Hosted by ${room.hostName}`;
+  $('shareBtn').textContent = isHost() ? 'Share' : 'Copy invite link';
+  $('shareBtn').classList.toggle('ghost', !isHost());
 }
 
 // ---------- people ----------
@@ -405,7 +415,120 @@ async function copyLink() {
   const localOnly = onThisComputerOnly && !networkUrl;
   toast(localOnly ? `Copied ${link} (only works on this computer)` : `Invite link copied: ${link}`);
 }
-$('shareBtn').addEventListener('click', copyLink);
+$('shareBtn').addEventListener('click', () => (isHost() ? openShare() : copyLink()));
+
+// ---------- no access ----------
+// Shown instead of the room: it doesn't exist, it's restricted, or the host removed you.
+let gatePoll = null;
+function showGate(reason, hostName = 'the host', message) {
+  clearInterval(gatePoll);
+  document.querySelector('.room').hidden = true;
+  $('gate').hidden = false;
+  const home = '<a class="btn ghost" href="/">Back to home</a>';
+  const ask = '<button class="btn" type="button" id="askAccess">Ask for access</button>';
+  if (reason === 'missing') {
+    $('gateTitle').textContent = "This room doesn't exist";
+    $('gateText').textContent = 'Check the link with whoever sent it. The room may have a different code.';
+    $('gateActions').innerHTML = home;
+    return;
+  }
+  $('gateTitle').textContent = reason === 'removed' ? "You've been removed from this room" : 'You need access';
+  $('gateText').textContent = reason === 'removed'
+    ? (message || `${hostName} removed you from this room.`) + ' You can ask to be let back in.'
+    : `This room is restricted. Ask ${hostName}, who hosts it, to let you in.`;
+  $('gateActions').innerHTML = ask + home;
+  $('askAccess').addEventListener('click', requestAccess);
+}
+
+async function requestAccess() {
+  $('askAccess').disabled = true;
+  try {
+    await fetch(`/api/rooms/${encodeURIComponent(roomId)}/request`, { method: 'POST' });
+    $('askAccess').remove();
+    $('gateOk').textContent = "Request sent. You'll be let in automatically when the host adds you.";
+    waitForAccess();
+  } catch {
+    $('askAccess').disabled = false;
+    toast("Couldn't reach the server. Try again.");
+  }
+}
+
+// After asking, check every few seconds and walk in as soon as the host says yes.
+function waitForAccess() {
+  clearInterval(gatePoll);
+  gatePoll = setInterval(async () => {
+    const access = await checkAccess().catch(() => null);
+    if (access?.access === 'ok') { clearInterval(gatePoll); location.reload(); }
+  }, 4000);
+}
+
+async function checkAccess() {
+  return (await fetch(`/api/rooms/${encodeURIComponent(roomId)}`)).json();
+}
+
+// ---------- Share panel (host only) ----------
+function openShare() {
+  renderShare();
+  $('shareDialog').showModal();
+  $('shareUsername').focus();
+}
+$('shareClose').addEventListener('click', () => $('shareDialog').close());
+$('shareDone').addEventListener('click', () => $('shareDialog').close());
+$('shareCopy').addEventListener('click', copyLink);
+
+const shareAction = (action, extra) => send({ type: 'share', action, ...extra });
+
+$('shareAddForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const username = $('shareUsername').value.trim();
+  if (!username) return;
+  shareAction('add', { username });
+  $('shareUsername').value = '';
+});
+$('accessSelect').addEventListener('change', (e) => shareAction('access', { access: e.target.value }));
+$('shareDialog').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-share]');
+  if (!b) return;
+  if (b.dataset.share === 'remove' && !confirm(`Remove ${b.dataset.name} from this room? They'll be disconnected and can't come back unless you add them again.`)) return;
+  shareAction(b.dataset.share, { userId: b.dataset.id });
+});
+
+function sharePerson(u, tag, buttons = []) {
+  return `<li>
+    <span class="avatar" style="--c:${u.color}">${avatarContent(u)}</span>
+    <span class="who"><strong>${esc(u.displayName)}${u.id === state.account?.id ? ' (you)' : ''}${u.online ? '<span class="online-dot" title="In the room now"></span>' : ''}</strong><span>@${esc(u.username)}</span></span>
+    ${tag ? `<span class="tag">${tag}</span>` : ''}
+    <span class="actions">${buttons.map(([label, action, cls = 'ghost']) =>
+      `<button class="btn ${cls} small" type="button" data-share="${action}" data-id="${u.id}" data-name="${esc(u.displayName)}">${label}</button>`).join('')}</span>
+  </li>`;
+}
+
+function renderShare() {
+  const s = state.share;
+  if (!s) return;
+  $('shareTitle').textContent = `Share “${state.room?.name || 'this room'}”`;
+  $('shareContacts').innerHTML = s.contacts.length
+    ? '<span class="chips-label">Your contacts:</span>' + s.contacts.map((c) =>
+      `<button class="chip" type="button" data-share="add" data-id="${c.id}"><span class="avatar" style="--c:${c.color}">${avatarContent(c)}</span>${esc(c.displayName)}</button>`).join('')
+    : '';
+  $('shareRequestsBlock').hidden = !s.requests.length;
+  $('shareRequests').innerHTML = s.requests.map((u) => sharePerson(u, '', [['Let in', 'add', ''], ['Dismiss', 'dismiss']])).join('');
+  $('sharePeople').innerHTML = [
+    s.host && sharePerson(s.host, 'Host'),
+    ...s.members.map((u) => sharePerson(u, '', [['Remove', 'remove']])),
+    ...s.visitors.map((u) => sharePerson(u, 'Joined with link', [['Remove', 'remove']])),
+  ].filter(Boolean).join('');
+  $('shareRemovedBlock').hidden = !s.removed.length;
+  $('shareRemoved').innerHTML = s.removed.map((u) => sharePerson(u, '', [['Allow back', 'allow-back']])).join('');
+  $('accessSelect').value = s.access;
+  $('accessIcon').innerHTML = s.access === 'open'
+    ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>'
+    : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
+  $('accessIcon').dataset.access = s.access;
+  $('accessHint').textContent = s.access === 'open'
+    ? 'Anyone who is signed in and has the link can join.'
+    : 'Only you and people you add can open this room.';
+}
 
 let renameTimer = null;
 $('roomName').addEventListener('input', () => {
@@ -434,5 +557,17 @@ function toast(text, action) {
 (async () => {
   updateSendButton();
   loadModels();
+  // Check access first, so people without it see why instead of a blank room.
+  const access = await checkAccess().catch(() => null);
+  if (access?.access === 'signin') return toSignIn();
+  if (access && access.access !== 'ok') {
+    showGate(access.exists ? access.access : 'missing', access.hostName);
+    if (access.requested) {
+      $('askAccess')?.remove();
+      $('gateOk').textContent = "You've asked to join. You'll be let in automatically when the host adds you.";
+      waitForAccess();
+    }
+    return;
+  }
   connect();
 })();

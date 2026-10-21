@@ -69,8 +69,10 @@ browser ── WebSocket ──► server/index.js
 - **Sending:** the server takes the shared prompt and the optional shared system prompt, adds the conversation so far, and streams the model's reply to everyone. Only one request runs per room at a time, so a team never pays twice for the same question.
 - **Credit:** each sent message records who helped write it and who sent it.
 - **Accounts:** everyone signs in before starting or joining a room, and their display name, color and picture come from their account. Passwords are stored only as salted `scrypt` hashes. Signing in sets an HttpOnly cookie that lasts 30 days, and the server keeps only a hash of it.
+- **Hosts and sharing:** whoever creates a room hosts it. New rooms are *Restricted*: only the host and people they add can open them. The host's **Share** button adds people (contacts or any username), removes them, lets in people who asked for access, and can switch the room to *Anyone with the link*. Someone the host removes can't come back through the link until the host adds them again.
+- **Contacts:** send a request by username from the account page (`/account`); the other person accepts or declines. Contacts appear as quick picks in Share.
 - **Storage:** everything is saved in `data/` (never committed to git):
-  - `data/<room>.json`: one file per room
+  - `data/rooms/<room>.json`: one file per room, including its host and who has access
   - `data/users.json`: accounts
   - `data/sessions.json`: who is signed in
   - `data/avatars/`: profile pictures
@@ -81,8 +83,8 @@ Any host that runs a long-lived Node process with WebSockets works, such as Rend
 
 ## Ideas for next steps
 
-- Private rooms that only invited accounts can open
-- An account page to change your display name, color, picture or password
+- Viewer and editor roles, so some people can read a room without changing the prompt
+- Letting the host hand the room over to someone else, or delete it
 - Send one prompt to several models side by side and compare the answers
 - Prompt version history and the ability to branch the conversation
 - Comments and suggestions on parts of the prompt

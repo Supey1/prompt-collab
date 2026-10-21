@@ -4,11 +4,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { attachWebSocket } from './ws.js';
-import { getRoom, roomExists, newRoomId, validRoomId, saveAll } from './rooms.js';
+import { loadRoom, createRoom, roomsFor, refreshAccount, validRoomId, saveAll } from './rooms.js';
 import { getCatalog } from './providers.js';
 import {
   COOKIE, createAccount, checkPassword, startSession, endSession,
   userFromCookie, readCookie, publicUser, readAvatar,
+  updateProfile, changePassword, contactLists, requestContact, acceptContact, disconnect,
 } from './accounts.js';
 
 loadDotEnv();
@@ -55,7 +56,40 @@ const server = http.createServer(async (req, res) => {
       res.setHeader('set-cookie', `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
       return json(res, { ok: true });
     }
-    if (p === '/api/me') return json(res, { user: me && publicUser(me) });
+    if (p === '/api/me') return json(res, { user: me && { ...publicUser(me), requests: me.incoming?.length || 0 } });
+
+    // Everything below needs a signed-in person.
+    const pages = ['/account', '/new'];
+    if (!me && (pages.includes(p) || p.startsWith('/r/'))) return redirect(res, `/signin?next=${encodeURIComponent(p)}`);
+    if (!me && p.startsWith('/api/') && !['/api/models', '/api/config', '/api/rooms/'].some((x) => p.startsWith(x))) {
+      return json(res, { error: 'Sign in first.' }, 401);
+    }
+
+    // ---- account page ----
+    if (p === '/account') return sendFile(res, path.join(ROOT, 'account.html'));
+    if (p === '/api/account') return json(res, { user: publicUser(me), ...contactLists(me) });
+    if (p === '/api/account/profile' && req.method === 'POST') {
+      const result = updateProfile(me, await readBody(req));
+      if (result.error) return json(res, result, 400);
+      refreshAccount(publicUser(me));
+      return json(res, { user: publicUser(me) });
+    }
+    if (p === '/api/account/password' && req.method === 'POST') {
+      const body = await readBody(req, 4096);
+      const result = await changePassword(me, body, readCookie(req.headers.cookie, COOKIE));
+      return json(res, result, result.error ? 400 : 200);
+    }
+
+    // ---- contacts ----
+    if (p.startsWith('/api/contacts/') && req.method === 'POST') {
+      const body = await readBody(req, 4096);
+      const action = p.slice('/api/contacts/'.length);
+      const result =
+        action === 'request' ? requestContact(me, body.username) :
+        action === 'accept' ? acceptContact(me, String(body.userId)) :
+        action === 'remove' ? disconnect(me, String(body.userId)) : { error: 'Unknown action.' };
+      return json(res, { ...result, ...contactLists(me) }, result.error ? 400 : 200);
+    }
     if (p.startsWith('/api/avatar/')) {
       const img = readAvatar(p.slice('/api/avatar/'.length));
       if (!img) return notFound(res);
@@ -63,22 +97,30 @@ const server = http.createServer(async (req, res) => {
       return res.end(img.bytes);
     }
 
-    // ---- rooms (signed-in people only) ----
-    if (p === '/new' || p.startsWith('/r/')) {
-      if (!me) return redirect(res, `/signin?next=${encodeURIComponent(p)}`);
-    }
-    if (p === '/new') return redirect(res, `/r/${newRoomId()}`);
+    // ---- rooms ----
+    if (p === '/new') return redirect(res, `/r/${createRoom(me.id).id}`);
     if (p.startsWith('/r/')) {
       if (!validRoomId(p.slice(3))) return redirect(res, '/');
       return sendFile(res, path.join(ROOT, 'room.html'));
     }
+    if (p === '/api/my-rooms') return json(res, { rooms: roomsFor(me.id) });
     if (p === '/api/models') {
       const models = await getCatalog({ refresh: url.searchParams.has('refresh') });
       return json(res, { models });
     }
-    if (p.startsWith('/api/rooms/')) {
-      const id = p.slice('/api/rooms/'.length);
-      return json(res, { exists: validRoomId(id) && roomExists(id) });
+    // /api/rooms/<code>: can I enter? /api/rooms/<code>/request: ask the host.
+    const roomApi = /^\/api\/rooms\/([^/]+)(\/request)?$/.exec(p);
+    if (roomApi) {
+      const room = loadRoom(roomApi[1]);
+      if (!me) return json(res, { exists: !!room, access: 'signin' });
+      if (!room) return json(res, { exists: false });
+      if (roomApi[2] && req.method === 'POST') room.requestAccess(me.id);
+      return json(res, {
+        exists: true,
+        access: room.canEnter(me.id),
+        hostName: room.roomInfo().hostName,
+        requested: room.requests.includes(me.id),
+      });
     }
     if (p === '/api/config') return json(res, { accessCodeRequired: !!ACCESS_CODE, lanUrls: lanUrls() });
     if (p === '/healthz') return json(res, { ok: true });
@@ -112,7 +154,13 @@ attachWebSocket(server, '/ws', (socket, req, url) => {
         socket.send({ type: 'auth', ok: false });
         return;
       }
-      room = getRoom(roomId);
+      const target = loadRoom(roomId);
+      const verdict = target ? target.canEnter(account.id) : 'missing';
+      if (verdict !== 'ok') {
+        socket.send({ type: 'denied', reason: verdict, hostName: target?.roomInfo().hostName });
+        return setTimeout(() => socket.destroy(), 1000);
+      }
+      room = target;
       room.join(socket, publicUser(account));
       return;
     }

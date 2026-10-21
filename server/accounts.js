@@ -23,6 +23,11 @@ export const validColor = (c) => /^#[0-9a-f]{6}$/i.test(c || '');
 
 // ---- sign up / sign in ----
 
+const passwordProblem = (password) =>
+  password.length < 8 ? 'Use at least 8 characters.' : password.length > 200 ? 'That password is too long.' : null;
+const displayNameProblem = (name) =>
+  !name || name.length > 40 ? 'Enter a display name (up to 40 characters).' : null;
+
 // Returns { user } or { field, error } describing the first problem found.
 export async function createAccount({ username, password, displayName, color, avatar }) {
   username = String(username || '').trim();
@@ -31,10 +36,9 @@ export async function createAccount({ username, password, displayName, color, av
   if (!/^[a-zA-Z0-9_.-]{3,20}$/.test(username)) {
     return { field: 'username', error: 'Use 3–20 letters, numbers, dots, dashes or underscores.' };
   }
-  if (findByUsername(username)) return { field: 'username', error: 'That username is taken.' };
-  if (password.length < 8) return { field: 'password', error: 'Use at least 8 characters.' };
-  if (password.length > 200) return { field: 'password', error: 'That password is too long.' };
-  if (!displayName || displayName.length > 40) return { field: 'displayName', error: 'Enter a display name (up to 40 characters).' };
+  if (findUser(username)) return { field: 'username', error: 'That username is taken.' };
+  if (passwordProblem(password)) return { field: 'password', error: passwordProblem(password) };
+  if (displayNameProblem(displayName)) return { field: 'displayName', error: displayNameProblem(displayName) };
   if (!validColor(color)) return { field: 'color', error: 'Pick a color.' };
 
   let image = null;
@@ -53,16 +57,18 @@ export async function createAccount({ username, password, displayName, color, av
     passwordHash: await hashPassword(password, salt),
     salt,
     createdAt: Date.now(),
+    contacts: [], // ids of accepted contacts
+    incoming: [], // ids of people waiting for this user to accept their request
   };
   if (image) user.avatar = saveAvatar(user.id, image);
   users[user.id] = user;
-  writeJson(USERS_FILE, users);
+  saveUsers();
   return { user };
 }
 
 // Returns the user if the username and password match, otherwise null.
 export async function checkPassword(username, password) {
-  const user = findByUsername(String(username || '').trim());
+  const user = findUser(String(username || '').trim());
   // Hash even when the user doesn't exist, so a wrong username takes as long as a wrong password.
   const salt = user?.salt || 'no-such-user';
   const hash = await hashPassword(String(password || ''), salt);
@@ -71,10 +77,110 @@ export async function checkPassword(username, password) {
   return ok ? user : null;
 }
 
-function findByUsername(username) {
-  const lower = username.toLowerCase();
+// Usernames ignore capitals: "Ana" and "ana" are the same account.
+export function findUser(username) {
+  const lower = String(username || '').trim().replace(/^@/, '').toLowerCase();
   return Object.values(users).find((u) => u.username.toLowerCase() === lower) || null;
 }
+
+export const getUser = (id) => users[id] || null;
+
+// ---- account page ----
+
+// avatarMode 'letter' removes any picture; 'picture' with a new data: URL replaces it,
+// and 'picture' without one keeps the current picture. Returns { user } or { field, error }.
+export function updateProfile(user, { displayName, color, avatarMode, avatar }) {
+  displayName = String(displayName || '').trim();
+  if (displayNameProblem(displayName)) return { field: 'displayName', error: displayNameProblem(displayName) };
+  if (!validColor(color)) return { field: 'color', error: 'Pick a color.' };
+  let image = null;
+  if (avatarMode === 'picture' && avatar) {
+    image = decodeAvatar(avatar);
+    if (!image) return { field: 'avatar', error: 'Use a PNG, JPG or WebP picture under 200 KB.' };
+  }
+  if (avatarMode === 'picture' && !image && !user.avatar) return { field: 'avatar', error: 'Choose a picture, or switch to Letter.' };
+
+  user.displayName = displayName;
+  user.color = color.toLowerCase();
+  if (avatarMode === 'letter' && user.avatar) { removeAvatarFile(user.avatar); user.avatar = null; }
+  if (image) {
+    if (user.avatar) removeAvatarFile(user.avatar);
+    user.avatar = saveAvatar(user.id, image);
+  }
+  saveUsers();
+  return { user };
+}
+
+// Change the password and sign out every other browser. Returns { ok } or { field, error }.
+export async function changePassword(user, { current, password }, keepToken) {
+  const hash = await hashPassword(String(current || ''), user.salt);
+  if (!crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(user.passwordHash, 'hex'))) {
+    return { field: 'current', error: "That isn't your current password." };
+  }
+  password = String(password || '');
+  if (passwordProblem(password)) return { field: 'newPassword', error: passwordProblem(password) };
+  user.salt = crypto.randomBytes(16).toString('hex');
+  user.passwordHash = await hashPassword(password, user.salt);
+  saveUsers();
+  const keep = keepToken && tokenHash(keepToken);
+  for (const [k, s] of Object.entries(sessions)) if (s.userId === user.id && k !== keep) delete sessions[k];
+  writeJson(SESSIONS_FILE, sessions);
+  return { ok: true };
+}
+
+// ---- contacts (request + accept) ----
+
+const contactsOf = (u) => (u.contacts ||= []);
+const incomingOf = (u) => (u.incoming ||= []);
+const without = (list, id) => list.filter((x) => x !== id);
+
+export function contactLists(user) {
+  const pub = (ids) => ids.map(getUser).filter(Boolean).map(publicUser);
+  return {
+    contacts: pub(contactsOf(user)),
+    incoming: pub(incomingOf(user)),
+    outgoing: pub(Object.values(users).filter((u) => incomingOf(u).includes(user.id)).map((u) => u.id)),
+  };
+}
+
+// Returns { message } on success or { error }.
+export function requestContact(user, username) {
+  const other = findUser(username);
+  if (!other) return { error: 'No account with that username.' };
+  if (other.id === user.id) return { error: "That's you." };
+  if (contactsOf(user).includes(other.id)) return { error: `${other.displayName} is already a contact.` };
+  if (incomingOf(other).includes(user.id)) return { error: `You already sent ${other.displayName} a request.` };
+  // They already asked you, so asking them back means yes.
+  if (incomingOf(user).includes(other.id)) return acceptContact(user, other.id);
+  incomingOf(other).push(user.id);
+  saveUsers();
+  return { message: `Request sent to ${other.displayName}.` };
+}
+
+export function acceptContact(user, otherId) {
+  const other = getUser(otherId);
+  if (!other || !incomingOf(user).includes(otherId)) return { error: 'That request is no longer there.' };
+  user.incoming = without(incomingOf(user), otherId);
+  if (!contactsOf(user).includes(otherId)) user.contacts.push(otherId);
+  if (!contactsOf(other).includes(user.id)) other.contacts.push(user.id);
+  saveUsers();
+  return { message: `${other.displayName} is now a contact.` };
+}
+
+// Decline their request, cancel yours, or remove an existing contact: all mean "not connected".
+export function disconnect(user, otherId) {
+  const other = getUser(otherId);
+  user.incoming = without(incomingOf(user), otherId);
+  user.contacts = without(contactsOf(user), otherId);
+  if (other) {
+    other.incoming = without(incomingOf(other), user.id);
+    other.contacts = without(contactsOf(other), user.id);
+  }
+  saveUsers();
+  return { ok: true };
+}
+
+const saveUsers = () => writeJson(USERS_FILE, users);
 
 function hashPassword(password, salt) {
   return new Promise((resolve, reject) => {
@@ -156,6 +262,10 @@ function saveAvatar(userId, { type, bytes }) {
   const file = `${userId}.${AVATAR_TYPES[type]}`;
   fs.writeFileSync(path.join(AVATAR_DIR, file), bytes);
   return { file, type, version: Date.now() };
+}
+
+function removeAvatarFile(avatar) {
+  try { fs.unlinkSync(path.join(AVATAR_DIR, avatar.file)); } catch { /* already gone */ }
 }
 
 // { type, bytes } for a user's profile picture, or null.

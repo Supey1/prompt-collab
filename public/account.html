@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Your account · PromptCollab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <div class="auth-page">
+    <header>
+      <a class="logo" href="/"><svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="5" width="26" height="22" rx="6" fill="currentColor"/><path d="M10 13l4 3-4 3" stroke="var(--paper)" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><rect x="17" y="10" width="2.4" height="12" rx="1.2" fill="#3d6bff"/><rect x="21" y="10" width="2.4" height="12" rx="1.2" fill="#e8457c"/></svg> PromptCollab</a>
+      <button class="icon-btn" id="themeBtn" type="button" aria-label="Toggle dark mode"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+    </header>
+
+    <main class="account-page">
+      <h1>Your account</h1>
+      <p class="auth-sub" id="signedInAs"></p>
+
+      <section class="auth-card" aria-labelledby="profileHeading">
+        <h2 id="profileHeading">Profile</h2>
+        <form id="profileForm" novalidate>
+          <div class="field">
+            <label for="displayName">Display name</label>
+            <input id="displayName" type="text" autocomplete="nickname" maxlength="40" required>
+            <p class="field-error" data-for="displayName"></p>
+          </div>
+        <fieldset class="field picture">
+          <legend>Profile picture</legend>
+          <div class="picture-row">
+            <span class="avatar-preview" id="avatarPreview" aria-hidden="true"></span>
+            <div class="picture-options">
+              <div class="segmented" role="radiogroup" aria-label="Profile picture type">
+                <label><input type="radio" name="avatarMode" value="letter" checked> Letter</label>
+                <label><input type="radio" name="avatarMode" value="picture"> Picture</label>
+              </div>
+              <div id="pictureControls" hidden>
+                <label class="btn ghost small file-btn">Choose a picture…<input type="file" id="avatarFile" accept="image/png,image/jpeg,image/webp,image/gif"></label>
+                <p class="hint" id="fileName">PNG, JPG, WebP or GIF.</p>
+              </div>
+            </div>
+          </div>
+          <p class="field-error" data-for="avatar"></p>
+
+          <p class="color-label" id="colorLabel">Your color <span class="hint-inline">(your letter and your cursor)</span></p>
+          <div class="swatches" id="colorSwatches" role="radiogroup" aria-labelledby="colorLabel"></div>
+          <p class="field-error" data-for="color"></p>
+        </fieldset>
+          <p class="form-ok" id="profileOk" role="status"></p>
+          <p class="form-error" id="profileError" role="alert"></p>
+          <button class="btn" type="submit">Save changes</button>
+        </form>
+      </section>
+
+      <section class="auth-card" aria-labelledby="passwordHeading">
+        <h2 id="passwordHeading">Password</h2>
+        <form id="passwordForm" novalidate>
+          <div class="field">
+            <label for="current">Current password</label>
+            <input id="current" type="password" autocomplete="current-password" required>
+            <p class="field-error" data-for="current"></p>
+          </div>
+          <div class="field">
+            <label for="newPassword">New password</label>
+            <input id="newPassword" type="password" autocomplete="new-password" required>
+            <p class="hint">At least 8 characters. Your other devices will be signed out.</p>
+            <p class="field-error" data-for="newPassword"></p>
+          </div>
+          <div class="field">
+            <label for="confirmNew">Confirm new password</label>
+            <input id="confirmNew" type="password" autocomplete="new-password" required>
+            <p class="field-error" data-for="confirmNew"></p>
+          </div>
+          <label class="check"><input type="checkbox" id="showPassword"> Show passwords</label>
+          <p class="form-ok" id="passwordOk" role="status"></p>
+          <p class="form-error" id="passwordError" role="alert"></p>
+          <button class="btn" type="submit">Change password</button>
+        </form>
+      </section>
+
+      <section class="auth-card" aria-labelledby="contactsHeading" id="contacts">
+        <h2 id="contactsHeading">Contacts</h2>
+        <p class="hint" style="margin:0 0 14px">Contacts show up first when you add people to a room. They have to accept your request.</p>
+        <form id="contactForm" class="inline-form" novalidate>
+          <label class="visually-hidden" for="contactUsername">Username</label>
+          <input id="contactUsername" type="text" placeholder="Username" autocapitalize="off" spellcheck="false" autocomplete="off">
+          <button class="btn" type="submit">Send request</button>
+        </form>
+        <p class="form-ok" id="contactOk" role="status"></p>
+        <p class="form-error" id="contactError" role="alert"></p>
+
+        <div id="incomingBlock" hidden>
+          <h3>Requests for you</h3>
+          <ul class="people" id="incomingList"></ul>
+        </div>
+        <h3>Your contacts</h3>
+        <ul class="people" id="contactList"></ul>
+        <div id="outgoingBlock" hidden>
+          <h3>Waiting for them to accept</h3>
+          <ul class="people" id="outgoingList"></ul>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script type="module" src="/js/account.js"></script>
+</body>
+</html>

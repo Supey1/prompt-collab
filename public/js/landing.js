@@ -14,9 +14,13 @@ async function showAccount() {
     el.innerHTML = '<a class="btn ghost small" href="/signin">Sign in</a><a class="btn small" href="/signup">Sign up</a>';
     return;
   }
-  el.innerHTML = `<span class="avatar" style="--c:${user.color};margin:0">${avatarContent(user)}</span>
-    <span class="name" title="@${esc(user.username)}">${esc(user.displayName)}</span>
+  const badge = user.requests ? `<span class="badge" title="${user.requests} contact request${user.requests > 1 ? 's' : ''}">${user.requests}</span>` : '';
+  el.innerHTML = `<a class="me" href="/account${user.requests ? '#contacts' : ''}" title="Your account (@${esc(user.username)})">
+      <span class="avatar" style="--c:${user.color};margin:0">${avatarContent(user)}</span>${badge}
+      <span class="name">${esc(user.displayName)}</span>
+    </a>
     <button class="btn ghost small" type="button" id="signOut">Sign out</button>`;
+  showMyRooms();
   document.getElementById('signOut').addEventListener('click', async () => {
     await fetch('/api/signout', { method: 'POST' }).catch(() => {});
     location.reload();
@@ -50,11 +54,11 @@ document.getElementById('joinForm').addEventListener('submit', async (e) => {
   location.href = `/r/${id}`;
 });
 
-// Rooms this browser has opened before (saved by room.js), newest first.
-function showRecentRooms() {
-  let recent = [];
-  try { recent = JSON.parse(localStorage.getItem('pc-recent')) || []; } catch { /* storage blocked */ }
-  if (!recent.length) return;
+// Rooms you host, were added to, or joined through a link, newest first.
+async function showMyRooms() {
+  let rooms = [];
+  try { ({ rooms } = await (await fetch('/api/my-rooms')).json()); } catch { return; }
+  if (!rooms?.length) return;
   const ago = (t) => {
     const min = Math.round((Date.now() - t) / 60000);
     if (min < 1) return 'just now';
@@ -62,9 +66,13 @@ function showRecentRooms() {
     if (min < 60 * 24) return `${Math.round(min / 60)} h ago`;
     return `${Math.round(min / 60 / 24)} days ago`;
   };
-  document.getElementById('recentList').innerHTML = recent.map((r) =>
-    `<li><a href="/r/${encodeURIComponent(r.id)}">${esc(r.name || 'Untitled prompt')}</a><span>${ago(r.at)}</span></li>`
-  ).join('');
+  document.getElementById('recentList').innerHTML = rooms.map((r) => {
+    const who = r.role === 'host' ? 'You host' : `Hosted by ${esc(r.hostName)}`;
+    const access = r.access === 'open' ? 'Anyone with the link' : 'Restricted';
+    return `<li><span class="room-line"><a href="/r/${encodeURIComponent(r.id)}">${esc(r.name || 'Untitled prompt')}</a>
+      <span class="room-meta">${who} · ${access}${r.online ? ` · <span class="online-dot"></span> ${r.online} here now` : ''}</span></span>
+      <span>${ago(r.updated)}</span></li>`;
+  }).join('');
   document.getElementById('recent').hidden = false;
 }
 
@@ -132,5 +140,4 @@ async function run() {
     await wait(4000);
   }
 }
-showRecentRooms();
 run();
