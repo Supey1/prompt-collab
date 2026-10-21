@@ -31,11 +31,13 @@ class Room {
 
   // ---- connection lifecycle ----
 
-  join(socket, hello) {
+  // `account` is the signed-in person's public profile (see accounts.js).
+  join(socket, account) {
     const user = {
       id: crypto.randomUUID().slice(0, 8),
-      name: String(hello.name || 'Anonymous').slice(0, 40),
-      color: /^#[0-9a-f]{6}$/i.test(hello.color || '') ? hello.color : '#6b5bd6',
+      name: account.displayName,
+      color: account.color,
+      avatar: account.avatar,
       cursor: null,
     };
     this.clients.set(socket, user);
@@ -60,7 +62,7 @@ class Room {
   }
 
   userList() {
-    return [...this.clients.values()].map(({ id, name, color, cursor }) => ({ id, name, color, cursor }));
+    return [...this.clients.values()].map(({ id, name, color, avatar, cursor }) => ({ id, name, color, avatar, cursor }));
   }
 
   broadcast(msg, except) {
@@ -90,12 +92,6 @@ class Room {
       case 'cursor': {
         user.cursor = FIELDS.includes(msg.field) ? { field: msg.field, anchor: msg.anchor | 0, head: msg.head | 0 } : null;
         this.broadcast({ type: 'cursor', id: user.id, cursor: user.cursor }, socket);
-        break;
-      }
-      case 'profile': {
-        if (msg.name) user.name = String(msg.name).slice(0, 40);
-        if (/^#[0-9a-f]{6}$/i.test(msg.color || '')) user.color = msg.color;
-        this.broadcast({ type: 'users', users: this.userList() });
         break;
       }
       case 'rename': {

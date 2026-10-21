@@ -14,7 +14,7 @@ cd prompt-collab
 npm start            # or: node server/index.js
 ```
 
-Open http://localhost:3000 and click **Start a room**. To try the collaboration on one computer, open the room link in a second browser window.
+Open http://localhost:3000, click **Sign up** to create an account, then click **Start a room**. To try the collaboration on one computer, open the room link in a private window and sign up as a second person there.
 
 Without API keys the app runs in **demo mode**: a built-in stand-in model replies, so you can try the collaboration before setting anything up.
 
@@ -58,7 +58,8 @@ Other settings:
 ```
 browser ── WebSocket ──► server/index.js
   │                         │
-  ├ editor.js               ├ rooms.js      one Room per link: shared text, thread, model, usage
+  ├ editor.js               ├ accounts.js   sign up / sign in, password hashing, sessions
+  │                         ├ rooms.js      one Room per link: shared text, thread, model, usage
   │  (textarea + cursors)   ├ doc.js        orders every edit (operational transformation)
   ├ doc-client.js           ├ providers.js  OpenAI / Anthropic / Gemini / OpenRouter / demo
   └ shared/ot.js ◄──────────┘ ws.js         minimal WebSocket server
@@ -67,7 +68,12 @@ browser ── WebSocket ──► server/index.js
 - **Live editing** uses operational transformation (`public/shared/ot.js`). The server is the single source of truth: it puts concurrent edits in order and transforms each one so every person ends up with identical text. `npm test` fuzz-tests this with simulated clients editing at the same time.
 - **Sending:** the server takes the shared prompt and the optional shared system prompt, adds the conversation so far, and streams the model's reply to everyone. Only one request runs per room at a time, so a team never pays twice for the same question.
 - **Credit:** each sent message records who helped write it and who sent it.
-- **Storage:** rooms are kept in memory and saved to `data/<room>.json`, so they survive restarts.
+- **Accounts:** everyone signs in before starting or joining a room, and their display name, color and picture come from their account. Passwords are stored only as salted `scrypt` hashes. Signing in sets an HttpOnly cookie that lasts 30 days, and the server keeps only a hash of it.
+- **Storage:** everything is saved in `data/` (never committed to git):
+  - `data/<room>.json`: one file per room
+  - `data/users.json`: accounts
+  - `data/sessions.json`: who is signed in
+  - `data/avatars/`: profile pictures
 
 ## Deploying
 
@@ -75,7 +81,8 @@ Any host that runs a long-lived Node process with WebSockets works, such as Rend
 
 ## Ideas for next steps
 
-- Accounts and private rooms (instead of share-by-link)
+- Private rooms that only invited accounts can open
+- An account page to change your display name, color, picture or password
 - Send one prompt to several models side by side and compare the answers
 - Prompt version history and the ability to branch the conversation
 - Comments and suggestions on parts of the prompt

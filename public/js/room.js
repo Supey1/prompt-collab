@@ -2,8 +2,8 @@ import { SharedEditor } from './editor.js';
 import { renderMarkdown } from './markdown.js';
 import { estimateTokens } from '../shared/ot.js';
 import { bindThemeToggle } from './theme.js';
+import { avatarContent } from './avatar.js';
 
-const COLORS = ['#3d6bff', '#e8457c', '#13a57a', '#d98a00', '#8b5cf6', '#0e9fbf'];
 const roomId = location.pathname.split('/')[2];
 const $ = (id) => document.getElementById(id);
 const store = {
@@ -51,29 +51,6 @@ for (const ed of [promptEd, systemEd]) {
   });
 }
 
-// ---------- profile ----------
-function askProfile() {
-  return new Promise((resolve) => {
-    const existing = store.get('pc-profile');
-    let color = existing?.color || COLORS[Math.floor(Math.random() * COLORS.length)];
-    const sw = $('swatches');
-    sw.innerHTML = COLORS.map((c) => `<button type="button" class="swatch" role="radio" style="--c:${c}" data-c="${c}" aria-label="Color ${c}" aria-checked="${c === color}"></button>`).join('');
-    sw.onclick = (e) => {
-      const b = e.target.closest('.swatch'); if (!b) return;
-      color = b.dataset.c;
-      sw.querySelectorAll('.swatch').forEach((x) => x.setAttribute('aria-checked', String(x === b)));
-    };
-    $('nameInput').value = existing?.name || '';
-    $('nameForm').onsubmit = () => {
-      const p = { name: $('nameInput').value.trim().slice(0, 40) || 'Anonymous', color };
-      store.set('pc-profile', p);
-      resolve(p);
-    };
-    $('nameDialog').addEventListener('cancel', (e) => e.preventDefault());
-    $('nameDialog').showModal();
-  });
-}
-
 function askCode() {
   return new Promise((resolve) => {
     $('codeForm').onsubmit = () => { const c = $('codeInput').value.trim(); store.set('pc-code', c); resolve(c); };
@@ -82,7 +59,7 @@ function askCode() {
 }
 
 // ---------- connection ----------
-let profile = store.get('pc-profile');
+const toSignIn = () => location.replace(`/signin?next=${encodeURIComponent(location.pathname)}`);
 
 function setStatus(s) {
   const el = $('status');
@@ -95,7 +72,8 @@ function connect() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const ws = new WebSocket(`${proto}//${location.host}/ws?room=${encodeURIComponent(roomId)}`);
   state.ws = ws;
-  ws.onopen = () => ws.send(JSON.stringify({ type: 'hello', name: profile.name, color: profile.color, code: store.get('pc-code') || '' }));
+  // Who you are comes from your sign-in cookie, which the browser sends automatically.
+  ws.onopen = () => ws.send(JSON.stringify({ type: 'hello', code: store.get('pc-code') || '' }));
   ws.onmessage = (e) => handle(JSON.parse(e.data));
   ws.onclose = () => {
     if (state.ws !== ws) return;
@@ -108,6 +86,9 @@ function connect() {
 
 async function handle(m) {
   switch (m.type) {
+    case 'signin':
+      state.ws.onclose = null; state.ws.close();
+      return toSignIn();
     case 'auth':
       state.ws.onclose = null; state.ws.close();
       await askCode();
@@ -201,13 +182,9 @@ function setUsers(users) {
   updateWriting();
 }
 
-function initials(name) {
-  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || '?';
-}
-
 function renderAvatars() {
   $('avatars').innerHTML = state.users.map((u) =>
-    `<span class="avatar${u.id === state.me ? ' you' : ''}" style="--c:${u.color}" title="${esc(u.name)}${u.id === state.me ? ' (you)' : ''}"${u.cursor ? ' data-active' : ''}>${esc(initials(u.name))}</span>`
+    `<span class="avatar${u.id === state.me ? ' you' : ''}" style="--c:${u.color}" title="${esc(u.name)}${u.id === state.me ? ' (you)' : ''}"${u.cursor ? ' data-active' : ''}>${avatarContent(u)}</span>`
   ).join('');
 }
 
@@ -457,6 +434,5 @@ function toast(text, action) {
 (async () => {
   updateSendButton();
   loadModels();
-  if (!profile) profile = await askProfile();
   connect();
 })();

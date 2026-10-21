@@ -6,6 +6,10 @@ import { fileURLToPath } from 'node:url';
 import { attachWebSocket } from './ws.js';
 import { getRoom, roomExists, newRoomId, validRoomId, saveAll } from './rooms.js';
 import { getCatalog } from './providers.js';
+import {
+  COOKIE, createAccount, checkPassword, startSession, endSession,
+  userFromCookie, readCookie, publicUser, readAvatar,
+} from './accounts.js';
 
 loadDotEnv();
 
@@ -22,7 +26,47 @@ const TYPES = {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const p = url.pathname;
+  const me = userFromCookie(req.headers.cookie);
   try {
+    // ---- accounts ----
+    if (p === '/signup' || p === '/signin') {
+      if (me) return redirect(res, safeNext(url.searchParams.get('next')));
+      return sendFile(res, path.join(ROOT, `${p.slice(1)}.html`));
+    }
+    if (p === '/api/signup' && req.method === 'POST') {
+      const body = await readBody(req);
+      const result = await createAccount(body);
+      if (result.error) return json(res, { field: result.field, error: result.error }, 400);
+      signIn(req, res, result.user);
+      return json(res, { user: publicUser(result.user) });
+    }
+    if (p === '/api/signin' && req.method === 'POST') {
+      const ip = req.socket.remoteAddress;
+      if (tooManyFailures(ip)) return json(res, { error: 'Too many wrong attempts. Try again in 15 minutes.' }, 429);
+      const body = await readBody(req);
+      const user = await checkPassword(body.username, body.password);
+      if (!user) { recordFailure(ip); return json(res, { error: 'Wrong username or password.' }, 401); }
+      failures.delete(ip);
+      signIn(req, res, user);
+      return json(res, { user: publicUser(user) });
+    }
+    if (p === '/api/signout' && req.method === 'POST') {
+      endSession(readCookie(req.headers.cookie, COOKIE));
+      res.setHeader('set-cookie', `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+      return json(res, { ok: true });
+    }
+    if (p === '/api/me') return json(res, { user: me && publicUser(me) });
+    if (p.startsWith('/api/avatar/')) {
+      const img = readAvatar(p.slice('/api/avatar/'.length));
+      if (!img) return notFound(res);
+      res.writeHead(200, { 'content-type': img.type, 'cache-control': 'private, max-age=31536000', 'x-content-type-options': 'nosniff' });
+      return res.end(img.bytes);
+    }
+
+    // ---- rooms (signed-in people only) ----
+    if (p === '/new' || p.startsWith('/r/')) {
+      if (!me) return redirect(res, `/signin?next=${encodeURIComponent(p)}`);
+    }
     if (p === '/new') return redirect(res, `/r/${newRoomId()}`);
     if (p.startsWith('/r/')) {
       if (!validRoomId(p.slice(3))) return redirect(res, '/');
@@ -43,14 +87,23 @@ const server = http.createServer(async (req, res) => {
     if (!file.startsWith(ROOT)) return notFound(res);
     return sendFile(res, file);
   } catch (e) {
+    if (e.message === 'Request too large') return json(res, { error: 'That upload is too large.' }, 413);
     console.error(e);
     res.writeHead(500).end('Server error');
   }
 });
 
-attachWebSocket(server, '/ws', (socket, _req, url) => {
+attachWebSocket(server, '/ws', (socket, req, url) => {
   const roomId = url.searchParams.get('room') || '';
   if (!validRoomId(roomId)) return socket.destroy();
+  // Only pages from this site may connect, and only for a signed-in person.
+  const origin = req.headers.origin;
+  if (origin && new URL(origin).host !== req.headers.host) return socket.destroy();
+  const account = userFromCookie(req.headers.cookie);
+  if (!account) {
+    socket.send({ type: 'signin' });
+    return setTimeout(() => socket.destroy(), 1000); // give the message time to arrive
+  }
   let room = null;
   socket.on('message', (msg) => {
     if (!room) {
@@ -60,7 +113,7 @@ attachWebSocket(server, '/ws', (socket, _req, url) => {
         return;
       }
       room = getRoom(roomId);
-      room.join(socket, msg);
+      room.join(socket, publicUser(account));
       return;
     }
     room.handle(socket, msg).catch((e) => console.error('[room]', e));
@@ -110,8 +163,50 @@ function lanUrls() {
     .sort((a, b) => score(a) - score(b))
     .map((a) => `http://${a.address}:${PORT}`);
 }
-function json(res, obj) {
-  res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(obj));
+function json(res, obj, status = 200) {
+  res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(obj));
+}
+
+// Read a JSON request body (up to `limit` bytes; profile pictures make sign-up the largest).
+function readBody(req, limit = 400 * 1024) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    req.on('data', (c) => {
+      size += c.length;
+      if (size > limit) { reject(new Error('Request too large')); req.destroy(); return; }
+      chunks.push(c);
+    });
+    req.on('end', () => {
+      try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')); } catch { resolve({}); }
+    });
+    req.on('error', reject);
+  });
+}
+
+// Give the browser a session cookie. HttpOnly keeps page scripts from reading it.
+function signIn(req, res, user) {
+  const { token, maxAge } = startSession(user);
+  const secure = req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
+  res.setHeader('set-cookie', `${COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`);
+}
+
+// Only follow `next` to a page on this site (so a link can't bounce people elsewhere).
+function safeNext(next) {
+  return typeof next === 'string' && next.startsWith('/') && !next.startsWith('//') ? next : '/';
+}
+
+// Slow down password guessing: 10 wrong tries from one address locks it out for 15 minutes.
+const failures = new Map(); // ip -> { count, since }
+function tooManyFailures(ip) {
+  const f = failures.get(ip);
+  if (f && Date.now() - f.since > 15 * 60e3) failures.delete(ip);
+  return (failures.get(ip)?.count || 0) >= 10;
+}
+function recordFailure(ip) {
+  const f = failures.get(ip) || { count: 0, since: Date.now() };
+  f.count++;
+  failures.set(ip, f);
 }
 function redirect(res, to) { res.writeHead(302, { location: to }).end(); }
 function notFound(res) { res.writeHead(404, { 'content-type': 'text/plain' }).end('Not found'); }
