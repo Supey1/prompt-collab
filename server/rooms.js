@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { DocState } from './doc.js';
-import { resolveModel, getCatalog } from './providers.js';
+import { parseModel, modelsFor, redact } from './providers.js';
+import { keysFor } from './keys.js';
 import { getUser, findUser, publicUser, contactLists } from './accounts.js';
 
 // Rooms live in their own folder so a room code can never collide with
@@ -150,7 +151,7 @@ class Room {
         break;
       }
       case 'model': {
-        if (!resolveModel(String(msg.model || ''))) return;
+        if (!parseModel(String(msg.model || ''))) return;
         this.model = msg.model;
         this.broadcast({ type: 'room', room: this.roomInfo(), by: user.name });
         this.scheduleSave();
@@ -280,8 +281,8 @@ class Room {
     if (this.generating) return socket.send({ type: 'notice', message: 'A response is already being generated.' });
     const prompt = this.docs.prompt.text.trim();
     if (!prompt) return socket.send({ type: 'notice', message: 'The prompt is empty.' });
-    const resolved = await this.resolveModel();
-    if (!resolved) return socket.send({ type: 'notice', message: 'Pick a model first.' });
+    const resolved = await this.modelFor(socket, user);
+    if (!resolved) return;
 
     const userMsg = {
       id: crypto.randomUUID(), role: 'user', content: prompt, ts: Date.now(),
@@ -305,17 +306,34 @@ class Room {
     const last = this.thread[this.thread.length - 1];
     const prev = this.thread[this.thread.length - 2];
     if (last?.role !== 'assistant' || prev?.role !== 'user') return;
-    const resolved = await this.resolveModel();
-    if (!resolved) return socket.send({ type: 'notice', message: 'Pick a model first.' });
+    const resolved = await this.modelFor(socket, user);
+    if (!resolved) return;
 
     this.thread.pop();
     this.broadcast({ type: 'remove', id: last.id });
     return this.respond(user, resolved, buildHistory(this.thread.slice(0, -1), prev.content));
   }
 
-  async resolveModel() {
-    if (!this.model) this.model = (await getCatalog())[0]?.id || null;
-    return this.model && resolveModel(this.model);
+  // The room's model plus the key of the person sending, who pays for the reply.
+  // Tells them (and returns null) if they don't have a key for it.
+  async modelFor(socket, user) {
+    const keys = keysFor(user.accountId);
+    if (!this.model) {
+      this.model = (await modelsFor(keys))[0]?.id || null;
+      this.broadcast({ type: 'room', room: this.roomInfo() });
+    }
+    const m = this.model && parseModel(this.model);
+    if (!m) { socket.send({ type: 'notice', message: 'Pick a model first.' }); return null; }
+    const key = m.provider.free ? 'demo' : keys[m.name];
+    if (!key) {
+      socket.send({
+        type: 'notice',
+        message: `To send with ${m.provider.label} models, add your own ${m.provider.label} API key. Your key is only used for messages you send.`,
+        action: { label: 'Add key', href: '/keys' },
+      });
+      return null;
+    }
+    return { provider: m.provider, model: m.model, key };
   }
 
   // Stream a model reply to `history` into the thread, for everyone in the room.
@@ -352,7 +370,12 @@ class Room {
       reply.status = 'done';
     } catch (e) {
       if (controller.signal.aborted) reply.status = 'stopped';
-      else { reply.status = 'error'; reply.error = e.message; console.warn('[send]', e.message); }
+      else {
+        // Provider errors are shown to the whole room: never let the sender's key appear in one.
+        reply.status = 'error';
+        reply.error = redact(e.message, resolved.key);
+        console.warn('[send]', reply.error);
+      }
     } finally {
       clearTimeout(flushTimer);
       flush();

@@ -5,7 +5,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { attachWebSocket } from './ws.js';
 import { loadRoom, createRoom, roomsFor, refreshAccount, validRoomId, saveAll } from './rooms.js';
-import { getCatalog } from './providers.js';
+import { PROVIDERS, KEYED, modelsFor, keyFormatProblem, checkKey } from './providers.js';
+import { saveKey, removeKey, keySummary, keysFor } from './keys.js';
 import {
   COOKIE, createAccount, checkPassword, startSession, endSession,
   userFromCookie, readCookie, publicUser, readAvatar,
@@ -27,6 +28,11 @@ const TYPES = {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const p = url.pathname;
+  setSecurityHeaders(req, res, p);
+  // Cross-site request forgery: only this site's own pages may change things.
+  if (req.method !== 'GET' && req.method !== 'HEAD' && !sameOrigin(req)) {
+    return json(res, { error: 'Request blocked: it came from another website.' }, 403);
+  }
   const me = userFromCookie(req.headers.cookie);
   try {
     // ---- accounts ----
@@ -35,6 +41,9 @@ const server = http.createServer(async (req, res) => {
       return sendFile(res, path.join(ROOT, `${p.slice(1)}.html`));
     }
     if (p === '/api/signup' && req.method === 'POST') {
+      if (!allow(signups, req.socket.remoteAddress, 10, 60 * 60e3)) {
+        return json(res, { error: 'Too many new accounts from this network. Try again in an hour.' }, 429);
+      }
       const body = await readBody(req);
       const result = await createAccount(body);
       if (result.error) return json(res, { field: result.field, error: result.error }, 400);
@@ -59,9 +68,9 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/me') return json(res, { user: me && { ...publicUser(me), requests: me.incoming?.length || 0 } });
 
     // Everything below needs a signed-in person.
-    const pages = ['/account', '/new'];
+    const pages = ['/account', '/new', '/keys'];
     if (!me && (pages.includes(p) || p.startsWith('/r/'))) return redirect(res, `/signin?next=${encodeURIComponent(p)}`);
-    if (!me && p.startsWith('/api/') && !['/api/models', '/api/config', '/api/rooms/'].some((x) => p.startsWith(x))) {
+    if (!me && p.startsWith('/api/') && !['/api/config', '/api/rooms/'].some((x) => p.startsWith(x))) {
       return json(res, { error: 'Sign in first.' }, 401);
     }
 
@@ -104,9 +113,37 @@ const server = http.createServer(async (req, res) => {
       return sendFile(res, path.join(ROOT, 'room.html'));
     }
     if (p === '/api/my-rooms') return json(res, { rooms: roomsFor(me.id) });
-    if (p === '/api/models') {
-      const models = await getCatalog({ refresh: url.searchParams.has('refresh') });
-      return json(res, { models });
+    // The models this person's own keys unlock (plus the free demo).
+    if (p === '/api/models') return json(res, { models: await modelsFor(keysFor(me.id)) });
+
+    // ---- API keys ----
+    if (p === '/keys') return sendFile(res, path.join(ROOT, 'keys.html'));
+    if (p === '/api/keys') return json(res, keyPageData(req, me));
+    const keyApi = /^\/api\/keys\/([a-z]+)(\/remove)?$/.exec(p);
+    if (keyApi && req.method === 'POST') {
+      const provider = keyApi[1];
+      if (!KEYED.includes(provider)) return json(res, { error: 'Unknown provider.' }, 404);
+      if (keyApi[2]) {
+        removeKey(me.id, provider);
+        return json(res, keyPageData(req, me));
+      }
+      if (!secureEnoughForKeys(req)) {
+        return json(res, { error: 'For your safety, keys can only be added over https:// or on the computer running PromptCollab. On a plain http:// network address anyone on the same Wi-Fi could read the key as it travels.' }, 403);
+      }
+      if (!allow(keyChecks, me.id, 10, 10 * 60e3)) {
+        return json(res, { error: 'Too many key checks. Wait a few minutes and try again.' }, 429);
+      }
+      const { key } = await readBody(req, 4096);
+      const clean = String(key || '').trim();
+      const problem = keyFormatProblem(provider, clean);
+      if (problem) return json(res, { error: problem }, 400);
+      try {
+        await checkKey(provider, clean);
+      } catch (e) {
+        return json(res, { error: e.message }, 400);
+      }
+      saveKey(me.id, provider, clean);
+      return json(res, { ...keyPageData(req, me), message: `${PROVIDERS[provider].label} key saved. It works.` });
     }
     // /api/rooms/<code>: can I enter? /api/rooms/<code>/request: ask the host.
     const roomApi = /^\/api\/rooms\/([^/]+)(\/request)?$/.exec(p);
@@ -126,7 +163,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/healthz') return json(res, { ok: true });
 
     const file = path.normalize(path.join(ROOT, p === '/' ? 'index.html' : p));
-    if (!file.startsWith(ROOT)) return notFound(res);
+    if (!file.startsWith(ROOT + path.sep)) return notFound(res);
     return sendFile(res, file);
   } catch (e) {
     if (e.message === 'Request too large') return json(res, { error: 'That upload is too large.' }, 413);
@@ -139,8 +176,7 @@ attachWebSocket(server, '/ws', (socket, req, url) => {
   const roomId = url.searchParams.get('room') || '';
   if (!validRoomId(roomId)) return socket.destroy();
   // Only pages from this site may connect, and only for a signed-in person.
-  const origin = req.headers.origin;
-  if (origin && new URL(origin).host !== req.headers.host) return socket.destroy();
+  if (!sameOrigin(req)) return socket.destroy();
   const account = userFromCookie(req.headers.cookie);
   if (!account) {
     socket.send({ type: 'signin' });
@@ -172,13 +208,9 @@ attachWebSocket(server, '/ws', (socket, req, url) => {
 server.listen(PORT, () => {
   console.log(`PromptCollab running at http://localhost:${PORT}`);
   for (const url of lanUrls()) console.log(`  On your network:   ${url}`);
-  getCatalog().then((m) => {
-    const providers = [...new Set(m.map((x) => x.providerLabel))];
-    console.log(`Models available from: ${providers.join(', ')}`);
-    if (providers.length === 1 && providers[0] === 'Demo') {
-      console.log('No API keys found — running in demo mode. See README to add keys.');
-    }
-  });
+  console.log('Everyone adds their own API keys on the API keys page (/keys).');
+  const oldKeys = ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'OPENROUTER_API_KEY'].filter((k) => process.env[k]);
+  if (oldKeys.length) console.warn(`Note: ${oldKeys.join(', ')} in .env are no longer used. You can delete them from .env.`);
 });
 
 for (const sig of ['SIGINT', 'SIGTERM']) {
@@ -237,6 +269,72 @@ function signIn(req, res, user) {
   const { token, maxAge } = startSession(user);
   const secure = req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
   res.setHeader('set-cookie', `${COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`);
+}
+
+// ---- security ----
+
+// Headers that make the browser stricter about what this site's pages can do.
+function setSecurityHeaders(req, res, p) {
+  res.setHeader('content-security-policy', [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", // inline style="" sets avatar colors
+    "font-src https://fonts.gstatic.com",
+    "img-src 'self' data: blob:",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'self'",
+    "frame-ancestors 'none'", // no one can show this site inside their page (clickjacking)
+  ].join('; '));
+  res.setHeader('x-frame-options', 'DENY');
+  res.setHeader('x-content-type-options', 'nosniff');
+  res.setHeader('referrer-policy', 'no-referrer');
+  res.setHeader('permissions-policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('cross-origin-opener-policy', 'same-origin');
+  if (isHttps(req)) res.setHeader('strict-transport-security', 'max-age=31536000');
+  // Never let a browser or proxy store private data.
+  if (p.startsWith('/api/') && !p.startsWith('/api/avatar/')) res.setHeader('cache-control', 'no-store');
+}
+
+const isHttps = (req) => req.headers['x-forwarded-proto'] === 'https' || !!req.socket.encrypted;
+
+// True if the request came from one of this site's own pages (or has no Origin,
+// like a direct visit). Never throws: Origin can be junk such as "null".
+function sameOrigin(req) {
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  try { return new URL(origin).host === req.headers.host; } catch { return false; }
+}
+
+// Keys may only be typed in over https, or on the computer running the server
+// (localhost never touches the network). ALLOW_INSECURE_KEYS=1 opts out on a trusted home network.
+function secureEnoughForKeys(req) {
+  if (isHttps(req) || process.env.ALLOW_INSECURE_KEYS === '1') return true;
+  return ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
+}
+
+// Everything the API keys page shows. Never includes a full key.
+function keyPageData(req, me) {
+  const saved = keySummary(me.id);
+  return {
+    secure: secureEnoughForKeys(req),
+    // OpenRouter first: one key covers the most models, so it's the easiest start.
+    providers: [...KEYED].sort((a, b) => (b === 'openrouter') - (a === 'openrouter')).map((name) => {
+      const p = PROVIDERS[name];
+      return { name, label: p.label, keyHint: p.keyHint, keyUrl: p.keyUrl, limitsUrl: p.limitsUrl, saved: saved[name] || null };
+    }),
+  };
+}
+
+// Simple fixed-window rate limits, keyed by IP or account.
+const signups = new Map();
+const keyChecks = new Map();
+function allow(map, id, max, windowMs) {
+  const now = Date.now();
+  const entry = map.get(id);
+  if (!entry || now - entry.since > windowMs) { map.set(id, { count: 1, since: now }); return true; }
+  return ++entry.count <= max;
 }
 
 // Only follow `next` to a page on this site (so a link can't bounce people elsewhere).

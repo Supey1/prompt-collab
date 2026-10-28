@@ -19,6 +19,7 @@ async function showAccount() {
       <span class="avatar" style="--c:${user.color};margin:0">${avatarContent(user)}</span>${badge}
       <span class="name">${esc(user.displayName)}</span>
     </a>
+    <a class="btn ghost small" href="/keys">API keys</a>
     <button class="btn ghost small" type="button" id="signOut">Sign out</button>`;
   showMyRooms();
   document.getElementById('signOut').addEventListener('click', async () => {

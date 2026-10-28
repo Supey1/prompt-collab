@@ -16,7 +16,7 @@
 
     <main class="account-page">
       <h1>Your account</h1>
-      <p class="auth-sub" id="signedInAs"></p>
+      <p class="auth-sub"><span id="signedInAs"></span> · <a href="/keys">Manage your API keys</a></p>
 
       <section class="auth-card" aria-labelledby="profileHeading">
         <h2 id="profileHeading">Profile</h2>
@@ -81,7 +81,7 @@
 
       <section class="auth-card" aria-labelledby="contactsHeading" id="contacts">
         <h2 id="contactsHeading">Contacts</h2>
-        <p class="hint" style="margin:0 0 14px">Contacts show up first when you add people to a room. They have to accept your request.</p>
+        <p class="hint contacts-hint">Contacts show up first when you add people to a room. They have to accept your request.</p>
         <form id="contactForm" class="inline-form" novalidate>
           <label class="visually-hidden" for="contactUsername">Username</label>
           <input id="contactUsername" type="text" placeholder="Username" autocapitalize="off" spellcheck="false" autocomplete="off">

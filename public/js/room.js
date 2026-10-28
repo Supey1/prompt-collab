@@ -162,7 +162,9 @@ async function handle(m) {
       break;
     case 'usage': state.usage = m.usage; updateTokens(); break;
     case 'generating': state.generating = m.generating; updateSendButton(); break;
-    case 'notice': toast(m.message); break;
+    case 'notice':
+      toast(m.message, m.action && { label: m.action.label, onClick: () => window.open(m.action.href, '_blank', 'noopener') });
+      break;
   }
 }
 
@@ -216,22 +218,41 @@ async function loadModels() {
     const r = await fetch('/api/models');
     state.models = (await r.json()).models;
   } catch { state.models = []; }
-  const groups = {};
-  for (const m of state.models) (groups[m.providerLabel] ||= []).push(m);
-  $('modelSelect').innerHTML = Object.entries(groups).map(([g, ms]) =>
-    `<optgroup label="${esc(g)}">${ms.map((m) => `<option value="${esc(m.id)}">${esc(m.model)}</option>`).join('')}</optgroup>`
-  ).join('') || '<option value="">No models configured</option>';
   syncModelSelect();
 }
 
+// The menu lists the models your own keys unlock. If the room uses a model you
+// have no key for, it still shows (so you can see what's picked), marked as such.
+const ADD_KEY = '__add-key';
 function syncModelSelect() {
+  const groups = {};
+  for (const m of state.models) (groups[m.providerLabel] ||= []).push(m);
+  let html = Object.entries(groups).map(([g, ms]) =>
+    `<optgroup label="${esc(g)}">${ms.map((m) => `<option value="${esc(m.id)}">${esc(m.model)}</option>`).join('')}</optgroup>`
+  ).join('');
+  if (state.model && !state.models.some((m) => m.id === state.model)) {
+    const [provider, ...rest] = state.model.split(':');
+    const label = { openai: 'OpenAI', anthropic: 'Anthropic', google: 'Google', openrouter: 'OpenRouter' }[provider] || provider;
+    html = `<option value="${esc(state.model)}">${esc(rest.join(':'))} (needs your ${esc(label)} key)</option>` + html;
+  }
+  html += `<option value="${ADD_KEY}">+ Add an API key…</option>`;
   const sel = $('modelSelect');
-  if (state.model && state.models.some((m) => m.id === state.model)) sel.value = state.model;
+  sel.innerHTML = html;
+  if (state.model) sel.value = state.model;
 }
+
+// Coming back from adding a key in another tab: show the new models.
+document.addEventListener('visibilitychange', () => { if (!document.hidden) loadModels(); });
 
 const labelFor = (id) => state.models.find((m) => m.id === id)?.model || id?.split(':').slice(1).join(':') || 'a model';
 
 $('modelSelect').addEventListener('change', (e) => {
+  if (e.target.value === ADD_KEY) {
+    // Open the keys page in a new tab so you don't lose your place in the room.
+    window.open('/keys', '_blank', 'noopener');
+    syncModelSelect();
+    return;
+  }
   state.model = e.target.value;
   send({ type: 'model', model: e.target.value });
 });
@@ -252,7 +273,7 @@ function sendPrompt() {
   if (state.generating || !promptEd.doc.text.trim()) return;
   // Make sure the room uses what this person sees selected.
   const sel = $('modelSelect').value;
-  if (sel && sel !== state.model) { state.model = sel; send({ type: 'model', model: sel }); }
+  if (sel && sel !== ADD_KEY && sel !== state.model) { state.model = sel; send({ type: 'model', model: sel }); }
   send({ type: 'send' });
 }
 
