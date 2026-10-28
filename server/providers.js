@@ -1,14 +1,21 @@
 // AI providers. Each one streams a reply as an async generator of
 //   { text: '...' }  pieces of the answer, and finally
 //   { usage: { input, output } }  when the provider reports token counts.
-// Keys come from environment variables; a provider without a key is hidden.
+// Keys belong to each person (see keys.js) and are passed in per request.
+// `keyPattern` makes sure a key only ever goes to the company that issued it.
+
+import crypto from 'node:crypto';
 
 const env = (k) => (process.env[k] || '').trim();
 
 export const PROVIDERS = {
   openai: {
     label: 'OpenAI',
-    key: () => env('OPENAI_API_KEY'),
+    keyPattern: /^sk-(?!ant-|or-)[A-Za-z0-9_-]{20,}$/,
+    keyHint: 'starts with sk-',
+    keyUrl: 'https://platform.openai.com/api-keys',
+    limitsUrl: 'https://platform.openai.com/settings/organization/limits',
+    check: (key) => getJSON('https://api.openai.com/v1/models', { Authorization: `Bearer ${key}` }),
     fallback: ['gpt-5', 'gpt-5-mini'],
     async list(key) {
       const r = await getJSON('https://api.openai.com/v1/models', { Authorization: `Bearer ${key}` });
@@ -23,7 +30,11 @@ export const PROVIDERS = {
 
   anthropic: {
     label: 'Anthropic',
-    key: () => env('ANTHROPIC_API_KEY'),
+    keyPattern: /^sk-ant-[A-Za-z0-9_-]{20,}$/,
+    keyHint: 'starts with sk-ant-',
+    keyUrl: 'https://console.anthropic.com/settings/keys',
+    limitsUrl: 'https://console.anthropic.com/settings/limits',
+    check: (key) => getJSON('https://api.anthropic.com/v1/models?limit=1', { 'x-api-key': key, 'anthropic-version': '2023-06-01' }),
     fallback: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'],
     async list(key) {
       const r = await getJSON('https://api.anthropic.com/v1/models?limit=100',
@@ -55,7 +66,11 @@ export const PROVIDERS = {
 
   google: {
     label: 'Google',
-    key: () => env('GEMINI_API_KEY') || env('GOOGLE_API_KEY'),
+    keyPattern: /^AIza[A-Za-z0-9_-]{30,}$/,
+    keyHint: 'starts with AIza',
+    keyUrl: 'https://aistudio.google.com/apikey',
+    limitsUrl: 'https://console.cloud.google.com/billing',
+    check: (key) => getJSON('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1', { 'x-goog-api-key': key }),
     fallback: ['gemini-2.5-pro', 'gemini-2.5-flash'],
     async list(key) {
       const r = await getJSON('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', { 'x-goog-api-key': key });
@@ -89,7 +104,12 @@ export const PROVIDERS = {
 
   openrouter: {
     label: 'OpenRouter',
-    key: () => env('OPENROUTER_API_KEY'),
+    keyPattern: /^sk-or-[A-Za-z0-9_-]{20,}$/,
+    keyHint: 'starts with sk-or-',
+    keyUrl: 'https://openrouter.ai/settings/keys',
+    limitsUrl: 'https://openrouter.ai/settings/keys',
+    // The model list is public, so check the key against an endpoint that needs it.
+    check: (key) => getJSON('https://openrouter.ai/api/v1/key', { Authorization: `Bearer ${key}` }),
     fallback: ['openai/gpt-5', 'anthropic/claude-sonnet-5-5', 'google/gemini-2.5-pro', 'meta-llama/llama-4-maverick', 'deepseek/deepseek-chat', 'mistralai/mistral-large'],
     async list() {
       const r = await getJSON('https://openrouter.ai/api/v1/models', {});
@@ -103,48 +123,91 @@ export const PROVIDERS = {
 
   demo: {
     label: 'Demo',
-    key: () => 'demo',
+    free: true, // needs no key
     fallback: ['echo'],
     list: async () => ['echo'],
     stream: demoStream,
   },
 };
 
+// ---- keys -----------------------------------------------------------------
+
+export const KEYED = Object.keys(PROVIDERS).filter((p) => !PROVIDERS[p].free);
+
+// Problem with a pasted key, or null. Checked before the key goes anywhere.
+export function keyFormatProblem(provider, key) {
+  const p = PROVIDERS[provider];
+  if (!p || p.free) return 'Unknown provider.';
+  if (typeof key !== 'string' || key.length > 300 || !p.keyPattern.test(key)) {
+    return `That doesn't look like an ${p.label} key (it ${p.keyHint}). Check you pasted the whole key into the right box.`;
+  }
+  return null;
+}
+
+// Ask the provider whether the key works. Resolves, or throws a readable error.
+export async function checkKey(provider, key) {
+  try {
+    await withTimeout(PROVIDERS[provider].check(key), 10000);
+  } catch (e) {
+    const msg = redact(e.message, key);
+    if (/^40[13]/.test(msg)) throw new Error(`${PROVIDERS[provider].label} rejected that key. Make sure it's active and copied in full.`);
+    throw new Error(`Couldn't check the key with ${PROVIDERS[provider].label}: ${msg}`);
+  }
+}
+
+// Blank out a key wherever it appears (provider errors are shown to the whole room).
+export function redact(text, ...keys) {
+  let out = String(text ?? '');
+  for (const k of keys) if (k && k.length > 8) out = out.split(k).join('[your key]');
+  return out;
+}
+
 // ---- model catalog -------------------------------------------------------
 
 const MAX_PER_PROVIDER = 40;
-let catalog = null;
+const LIST_TTL = 10 * 60e3;
+const listCache = new Map(); // sha256(provider + key) -> { at, models }
 
+// Models someone can use with their own keys ({ provider: key }), plus the demo.
 // Returns [{ id: 'provider:model', provider, model, providerLabel }]
-export async function getCatalog({ refresh = false } = {}) {
-  if (catalog && !refresh) return catalog;
+export async function modelsFor(keys = {}) {
   const out = [];
   for (const [name, p] of Object.entries(PROVIDERS)) {
-    const key = p.key();
-    if (!key) continue;
-    if (name === 'demo' && env('DISABLE_DEMO') === '1') continue;
-    let models = p.fallback;
-    try {
-      const live = await withTimeout(p.list(key), 8000);
-      if (live?.length) models = live;
-    } catch (e) {
-      console.warn(`[models] couldn't list ${p.label} models (${e.message}); using defaults`);
-    }
-    // Keep the featured defaults first, then the rest of the live list.
-    const ordered = [...new Set([...p.fallback.filter((m) => models.includes(m)), ...models])].slice(0, MAX_PER_PROVIDER);
-    for (const model of ordered) out.push({ id: `${name}:${model}`, provider: name, model, providerLabel: p.label });
+    if (p.free ? env('DISABLE_DEMO') === '1' : !keys[name]) continue;
+    const models = await listModels(name, keys[name] || 'free');
+    for (const model of models) out.push({ id: `${name}:${model}`, provider: name, model, providerLabel: p.label });
   }
-  catalog = out;
-  return catalog;
+  return out;
 }
 
-export function resolveModel(id) {
-  const i = id.indexOf(':');
+async function listModels(name, key) {
+  const p = PROVIDERS[name];
+  // Cache by a hash so the plain key isn't kept around as a map key.
+  const cacheKey = crypto.createHash('sha256').update(`${name}:${key}`).digest('hex');
+  const hit = listCache.get(cacheKey);
+  if (hit && Date.now() - hit.at < LIST_TTL) return hit.models;
+  let models = p.fallback;
+  try {
+    const live = await withTimeout(p.list(key), 8000);
+    if (live?.length) models = live;
+  } catch (e) {
+    console.warn(`[models] couldn't list ${p.label} models (${redact(e.message, key)}); using defaults`);
+  }
+  // Keep the featured defaults first, then the rest of the live list.
+  const ordered = [...new Set([...p.fallback.filter((m) => models.includes(m)), ...models])].slice(0, MAX_PER_PROVIDER);
+  listCache.set(cacheKey, { at: Date.now(), models: ordered });
+  return ordered;
+}
+
+// 'openai:gpt-5' -> { name: 'openai', provider, model: 'gpt-5' }, or null.
+export function parseModel(id) {
+  const i = String(id).indexOf(':');
   if (i < 0) return null;
-  const provider = PROVIDERS[id.slice(0, i)];
+  const name = id.slice(0, i);
+  const provider = Object.hasOwn(PROVIDERS, name) ? PROVIDERS[name] : null;
   const model = id.slice(i + 1);
-  if (!provider || !provider.key() || !model) return null;
-  return { provider, model, key: provider.key() };
+  if (!provider || !model || model.length > 200) return null;
+  return { name, provider, model };
 }
 
 // ---- helpers --------------------------------------------------------------
@@ -220,14 +283,7 @@ Your team's prompt was **${words} words** (~${Math.round(last.length / 4)} token
 
 > ${last.slice(0, 280).replace(/\n/g, '\n> ')}${last.length > 280 ? '…' : ''}
 
-To get real answers, add one or more keys and restart the server:
-
-\`\`\`bash
-OPENAI_API_KEY=...      # GPT models
-ANTHROPIC_API_KEY=...   # Claude models
-GEMINI_API_KEY=...      # Gemini models
-OPENROUTER_API_KEY=...  # hundreds of models through one key
-\`\`\`
+To get real answers, open **API keys** from the home page and add your own key (OpenRouter, OpenAI, Anthropic or Google). Each person's key is used only for the messages they send.
 
 Everyone in this room saw this answer stream in at the same time.`;
   const pieces = reply.match(/\S+\s*/g) || [];

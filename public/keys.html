@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>API keys · PromptCollab</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <div class="auth-page">
+    <header>
+      <a class="logo" href="/"><svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="5" width="26" height="22" rx="6" fill="currentColor"/><path d="M10 13l4 3-4 3" stroke="var(--paper)" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><rect x="17" y="10" width="2.4" height="12" rx="1.2" fill="#3d6bff"/><rect x="21" y="10" width="2.4" height="12" rx="1.2" fill="#e8457c"/></svg> PromptCollab</a>
+      <button class="icon-btn" id="themeBtn" type="button" aria-label="Toggle dark mode"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+    </header>
+
+    <main class="account-page">
+      <h1>API keys</h1>
+      <p class="auth-sub">Add your own key to get real answers. Your key pays only for messages <strong>you</strong> send, in any room. Nobody else can see it or use it.</p>
+
+      <div class="notice danger" id="insecure" hidden>
+        <strong>This connection isn't secure enough for keys.</strong>
+        You opened PromptCollab over plain <code>http://</code> on a network address, so anyone on the same Wi-Fi could read a key as you paste it.
+        Add keys on the computer running PromptCollab (at <code>localhost</code>), or once the site has <code>https://</code>.
+      </div>
+
+      <div id="providers"></div>
+
+      <section class="auth-card notice-card" aria-labelledby="safetyHeading">
+        <h2 id="safetyHeading">How your keys are protected</h2>
+        <ul class="safety">
+          <li><strong>Encrypted</strong> on the server (AES-256-GCM) and never shown again. You only see the last 4 characters.</li>
+          <li><strong>Checked before saving</strong>: the provider confirms the key works.</li>
+          <li><strong>Only sent to the company that made it</strong>, and only when you press Send or Regenerate.</li>
+          <li><strong>Hidden from error messages</strong> that the rest of the room can see.</li>
+          <li><strong>Set a spending limit</strong> with each provider (links above), so a mistake can never cost more than you're comfortable with.</li>
+        </ul>
+      </section>
+    </main>
+  </div>
+  <script type="module" src="/js/keys.js"></script>
+</body>
+</html>
