@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('/css/fonts.css');
 
 :root {
   --paper: #eef1f6;
@@ -13,7 +13,9 @@
   --btn-text: #ffffff;
   --code-bg: #f3f5f9;
   --shadow: 0 1px 0 rgba(24, 32, 47, .04), 0 8px 24px -12px rgba(24, 32, 47, .18);
-  --sans: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+  /* Interface in Inter, model replies in a serif (like Claude's), code in JetBrains Mono. */
+  --sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
   --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   --r-lg: 14px;
   --r-sm: 8px;
@@ -72,8 +74,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .landing header { display: flex; justify-content: space-between; align-items: center; }
 .hero { display: grid; grid-template-columns: 1.1fr 1fr; gap: 56px; align-items: center; padding: 72px 0 56px; }
 .hero h1 {
-  font-size: clamp(40px, 5.4vw, 64px); line-height: 1.02; letter-spacing: -.035em;
-  font-weight: 700; margin: 0 0 20px; font-variation-settings: 'opsz' 96;
+  font-size: clamp(40px, 5.4vw, 64px); line-height: 1.05; letter-spacing: -.03em;
+  font-weight: 650; margin: 0 0 20px;
 }
 .hero p { font-size: 19px; color: var(--ink-2); max-width: 30em; margin: 0 0 28px; }
 .hero .actions { display: flex; gap: 12px; flex-wrap: wrap; }
@@ -171,7 +173,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .authors { display: inline-flex; align-items: center; gap: 6px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); display: inline-block; }
 .model-tag { font-weight: 600; color: var(--ink); }
-.msg.assistant .body { font-size: 16px; line-height: 1.65; }
+.msg.assistant .body { font-family: var(--serif); font-size: 17px; line-height: 1.7; }
 .msg.assistant .body > :first-child { margin-top: 0; }
 .msg.assistant .body > :last-child { margin-bottom: 0; }
 .body pre {
