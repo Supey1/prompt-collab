@@ -392,26 +392,38 @@ function editAndResend(m) {
 }
 
 // ---------- misc ----------
-// Copy text to the clipboard. Browsers (Safari especially) only allow this
-// right after a click, so nothing here waits on the network first. The older
-// execCommand copy goes first because it also works on plain http://
-// network addresses, where navigator.clipboard doesn't exist.
+// Copy text to the clipboard. Browsers only allow this right after a click, so
+// nothing here waits on the network first (Safari is strictest about that).
+// The clipboard API only exists on https:// and localhost; on a plain http://
+// network address we fall back to the older execCommand copy.
 function copyText(text) {
+  if (navigator.clipboard) {
+    return navigator.clipboard.writeText(text).then(() => true, () => legacyCopy(text));
+  }
+  return Promise.resolve(legacyCopy(text));
+}
+
+function legacyCopy(text) {
+  // While a dialog (like Share) is open, the rest of the page is inert and can't
+  // be selected, so the temporary textarea has to go inside the open dialog.
+  const host = document.querySelector('dialog[open]') || document.body;
   const ta = document.createElement('textarea');
   ta.value = text;
   ta.setAttribute('readonly', '');
   ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;font-size:16px';
   const focused = document.activeElement;
-  document.body.appendChild(ta);
+  host.appendChild(ta);
+  ta.focus();
   ta.select();
   ta.setSelectionRange(0, text.length); // iOS Safari ignores select()
   let ok = false;
-  try { ok = document.execCommand('copy'); } catch { /* not allowed */ }
+  // execCommand can report success even when nothing was selected, so check first.
+  if (document.activeElement === ta && ta.selectionEnd - ta.selectionStart === text.length) {
+    try { ok = document.execCommand('copy'); } catch { /* not allowed */ }
+  }
   ta.remove();
   focused?.focus?.();
-  if (ok) return Promise.resolve(true);
-  if (!navigator.clipboard) return Promise.resolve(false);
-  return navigator.clipboard.writeText(text).then(() => true, () => false);
+  return ok;
 }
 
 // A localhost link only works on this computer, so invites use the network
@@ -427,7 +439,8 @@ function inviteLink() {
   return location.href;
 }
 
-async function copyLink() {
+// `button`, when given, shows "Copied!" on itself: toasts sit behind an open dialog.
+async function copyLink(button) {
   const link = inviteLink();
   if (!(await copyText(link))) {
     prompt('Copying was blocked by the browser. Copy this invite link:', link);
@@ -435,6 +448,11 @@ async function copyLink() {
   }
   const localOnly = onThisComputerOnly && !networkUrl;
   toast(localOnly ? `Copied ${link} (only works on this computer)` : `Invite link copied: ${link}`);
+  if (button) {
+    const label = button.textContent;
+    button.textContent = 'Copied!';
+    setTimeout(() => { button.textContent = label; }, 1500);
+  }
 }
 $('shareBtn').addEventListener('click', () => (isHost() ? openShare() : copyLink()));
 
@@ -495,7 +513,7 @@ function openShare() {
 }
 $('shareClose').addEventListener('click', () => $('shareDialog').close());
 $('shareDone').addEventListener('click', () => $('shareDialog').close());
-$('shareCopy').addEventListener('click', copyLink);
+$('shareCopy').addEventListener('click', (e) => copyLink(e.currentTarget));
 
 const shareAction = (action, extra) => send({ type: 'share', action, ...extra });
 
