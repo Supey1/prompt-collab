@@ -23,6 +23,7 @@ const TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png',
   '.ico': 'image/x-icon', '.json': 'application/json', '.webmanifest': 'application/manifest+json',
+  '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8',
 };
 
 const server = http.createServer(async (req, res) => {
@@ -222,9 +223,11 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
 function sendFile(res, file) {
   fs.readFile(file, (err, data) => {
     if (err) return notFound(res);
+    const ext = path.extname(file);
     res.writeHead(200, {
-      'content-type': TYPES[path.extname(file)] || 'application/octet-stream',
-      'cache-control': 'no-cache',
+      'content-type': TYPES[ext] || 'application/octet-stream',
+      // Font files never change, so browsers keep them; everything else is re-checked.
+      'cache-control': ext === '.woff2' ? 'public, max-age=31536000, immutable' : 'no-cache',
     });
     res.end(data);
   });
@@ -278,8 +281,8 @@ function setSecurityHeaders(req, res, p) {
   res.setHeader('content-security-policy', [
     "default-src 'self'",
     "script-src 'self'",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", // inline style="" sets avatar colors
-    "font-src https://fonts.gstatic.com",
+    "style-src 'self' 'unsafe-inline'", // inline style="" sets avatar colors
+    "font-src 'self'", // fonts ship with the app, so no third-party font server sees visitors
     "img-src 'self' data: blob:",
     "connect-src 'self'",
     "object-src 'none'",

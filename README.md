@@ -68,6 +68,7 @@ Settings (`.env`):
 - Requests that change anything must come from the app's own pages (CSRF protection), and live connections check the same.
 - A strict Content Security Policy (only the app's own scripts run), no framing (clickjacking), `nosniff`, no referrer, and `no-store` on private API responses.
 - Rate limits on sign-in attempts, new accounts, and key checks.
+- Fonts ship with the app in `public/fonts/` (Inter, Source Serif 4, JetBrains Mono; SIL Open Font License), so no third-party font service sees your visitors.
 
 ## How it works
 
