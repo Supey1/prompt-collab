@@ -1,3 +1,4 @@
+import './env.js'; // must stay first: loads .env before the files below read their settings
 import http from 'node:http';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -7,6 +8,7 @@ import { attachWebSocket } from './ws.js';
 import { loadRoom, createRoom, roomsFor, refreshAccount, validRoomId, saveAll, exportRooms, removeAccountFromRooms } from './rooms.js';
 import { PROVIDERS, KEYED, modelsFor, keyFormatProblem, checkKey } from './providers.js';
 import { saveKey, removeKey, removeAllKeys, keySummary, keysFor } from './keys.js';
+import { houseEnabled, houseStatus, checkHouseKey } from './house.js';
 import {
   COOKIE, createAccount, checkPassword, startSession, endSession,
   userFromCookie, readCookie, publicUser, readAvatar,
@@ -14,7 +16,6 @@ import {
   verifyPassword, newRecoveryCodes, recoveryCodesLeft, resetWithCode, exportAccount, deleteAccountRecord,
 } from './accounts.js';
 
-loadDotEnv();
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const PORT = Number(process.env.PORT) || 3000;
@@ -154,7 +155,11 @@ const server = http.createServer(async (req, res) => {
     }
     if (p === '/api/my-rooms') return json(res, { rooms: roomsFor(me.id) });
     // The models this person's own keys unlock (plus the free demo).
-    if (p === '/api/models') return json(res, { models: await modelsFor(keysFor(me.id)) });
+    if (p === '/api/models') {
+      const keys = keysFor(me.id);
+      // usingHouse: free models would run on the site's key (they have no OpenRouter key of their own).
+      return json(res, { models: await modelsFor(keys, { house: houseEnabled() }), house: { ...houseStatus(me.id), usingHouse: houseEnabled() && !keys.openrouter } });
+    }
 
     // ---- API keys ----
     if (p === '/keys') return sendFile(res, path.join(ROOT, 'keys.html'));
@@ -249,6 +254,8 @@ server.listen(PORT, () => {
   console.log(`PromptCollab running at http://localhost:${PORT}`);
   for (const url of lanUrls()) console.log(`  On your network:   ${url}`);
   console.log('Everyone adds their own API keys on the API keys page (/keys).');
+  if (houseEnabled()) checkHouseKey();
+  else console.log('Free messages without a key: off (set OPENROUTER_HOUSE_KEY in .env to turn them on).');
   const oldKeys = ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'OPENROUTER_API_KEY'].filter((k) => process.env[k]);
   if (oldKeys.length) console.warn(`Note: ${oldKeys.join(', ')} in .env are no longer used. You can delete them from .env.`);
 });
@@ -400,6 +407,7 @@ function keyPageData(req, me) {
   const saved = keySummary(me.id);
   return {
     secure: secureEnoughForKeys(req),
+    house: houseStatus(me.id), // free messages without a key, if the site offers them
     // OpenRouter first: one key covers the most models, so it's the easiest start.
     providers: [...KEYED].sort((a, b) => (b === 'openrouter') - (a === 'openrouter')).map((name) => {
       const p = PROVIDERS[name];
@@ -447,15 +455,4 @@ function errorPage(res, status) {
   try { html = fs.readFileSync(path.join(ROOT, `${status}.html`), 'utf8').replace('<!--meta-->', pageMeta(res.req)); } catch { /* page missing */ }
   res.writeHead(status, { 'content-type': html ? TYPES['.html'] : 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
   res.end(html || (status === 404 ? 'Not found' : 'Server error'));
-}
-
-// Tiny .env loader so keys can live in a file without any dependency.
-function loadDotEnv() {
-  try {
-    const text = fs.readFileSync(path.join(process.cwd(), '.env'), 'utf8');
-    for (const line of text.split('\n')) {
-      const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/i);
-      if (m && !(m[1] in process.env)) process.env[m[1]] = m[2].replace(/^(['"])(.*)\1$/, '$2');
-    }
-  } catch { /* no .env file */ }
 }

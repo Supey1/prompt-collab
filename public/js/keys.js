@@ -5,7 +5,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 bindThemeToggle($('themeBtn'));
 
 const BLURB = {
-  openrouter: 'One key for hundreds of models (GPT, Claude, Gemini, Llama, DeepSeek and more), some free. The easiest place to start.',
+  openrouter: 'One key for hundreds of models (GPT, Claude, Gemini, Llama, DeepSeek and more). A free account, with no card, gives you 50 messages a day on its free models.',
   openai: 'GPT models, straight from OpenAI.',
   anthropic: 'Claude models, straight from Anthropic.',
   google: 'Gemini models, from Google AI Studio.',
@@ -24,7 +24,23 @@ async function api(url, body) {
 let page = null;
 let editing = new Set(); // providers whose "Replace" box is open
 
+function renderFree() {
+  const h = page.house || {};
+  const own = page.providers.find((p) => p.name === 'openrouter')?.saved;
+  $('freeInfo').hidden = false;
+  if (own) {
+    $('freeText').innerHTML = 'Your own OpenRouter key covers the <strong>Free models</strong> in every room: up to 50 messages a day on a free OpenRouter account.';
+  } else if (h.enabled) {
+    $('freeText').innerHTML = `You can use the <strong>Free models</strong> in any room without adding a key: <strong>${h.left} of ${h.perPerson}</strong> free messages left today (resets at midnight UTC). ` +
+      'For more, make a free OpenRouter account (no card needed) and add its key below: that gives you 50 a day of your own.';
+  } else {
+    $('freeText').innerHTML = 'Want to try real AI for free? Make a free OpenRouter account (no card needed), create a key, and add it in the OpenRouter box below. ' +
+      'You\'ll get 50 messages a day on OpenRouter\'s free models.';
+  }
+}
+
 function render() {
+  renderFree();
   $('insecure').hidden = page.secure;
   $('providers').innerHTML = page.providers.map((p) => {
     const saved = p.saved;

@@ -19,6 +19,16 @@ const SECRET_FILE = path.join(DATA_DIR, 'secret.key');
 
 const store = readJson(KEYS_FILE, {}); // userId -> provider -> { box, last4, addedAt }
 const master = loadMasterKey();
+// Keys saved before KEY_ENCRYPTION_SECRET was set (or while a bug ignored it in .env)
+// were encrypted with data/secret.key. They're still readable and get re-encrypted.
+const legacy = process.env.KEY_ENCRYPTION_SECRET ? readSecretFile() : null;
+
+function readSecretFile() {
+  try {
+    const saved = fs.readFileSync(SECRET_FILE);
+    return saved.length === 32 ? saved : null;
+  } catch { return null; }
+}
 
 function loadMasterKey() {
   const fromEnv = (process.env.KEY_ENCRYPTION_SECRET || '').trim();
@@ -26,10 +36,8 @@ function loadMasterKey() {
     if (fromEnv.length < 32) console.warn('[keys] KEY_ENCRYPTION_SECRET is short; use at least 32 random characters.');
     return crypto.createHash('sha256').update(fromEnv).digest();
   }
-  try {
-    const saved = fs.readFileSync(SECRET_FILE);
-    if (saved.length === 32) return saved;
-  } catch { /* first run */ }
+  const saved = readSecretFile();
+  if (saved) return saved;
   const fresh = crypto.randomBytes(32);
   fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.writeFileSync(SECRET_FILE, fresh, { mode: 0o600 });
@@ -47,9 +55,9 @@ function seal(plain, userId, provider) {
   return Buffer.concat([iv, cipher.getAuthTag(), body]).toString('base64');
 }
 
-function open(box, userId, provider) {
+function open(box, userId, provider, secret = master) {
   const raw = Buffer.from(box, 'base64');
-  const decipher = crypto.createDecipheriv('aes-256-gcm', master, raw.subarray(0, 12));
+  const decipher = crypto.createDecipheriv('aes-256-gcm', secret, raw.subarray(0, 12));
   decipher.setAAD(aad(userId, provider));
   decipher.setAuthTag(raw.subarray(12, 28));
   return Buffer.concat([decipher.update(raw.subarray(28)), decipher.final()]).toString('utf8');
@@ -79,7 +87,14 @@ export function removeAllKeys(userId) {
 export function getKey(userId, provider) {
   const entry = store[userId]?.[provider];
   if (!entry) return null;
-  try { return open(entry.box, userId, provider); } catch { return null; }
+  try { return open(entry.box, userId, provider); } catch { /* maybe the old secret */ }
+  if (!legacy) return null;
+  try {
+    const key = open(entry.box, userId, provider, legacy);
+    entry.box = seal(key, userId, provider); // re-encrypt with the current secret
+    writeJson(KEYS_FILE, store);
+    return key;
+  } catch { return null; }
 }
 
 // What the browser may know: which providers have a key, and its last 4 characters.
