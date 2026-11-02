@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy · PromptCollab</title>
+  <!--meta-->
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <div class="auth-page">
+    <header>
+      <a class="logo" href="/"><svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="5" width="26" height="22" rx="6" fill="currentColor"/><path d="M10 13l4 3-4 3" stroke="var(--paper)" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><rect x="17" y="10" width="2.4" height="12" rx="1.2" fill="#3d6bff"/><rect x="21" y="10" width="2.4" height="12" rx="1.2" fill="#e8457c"/></svg> PromptCollab</a>
+      <button class="icon-btn" id="themeBtn" type="button" aria-label="Toggle dark mode"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+    </header>
+
+    <main class="account-page prose">
+      <h1>Privacy</h1>
+      <p class="auth-sub">The short version: PromptCollab stores only what it needs to work, keeps it on the server it runs on, never sells or shares it, and has no ads or trackers. This copy of PromptCollab is run by the person running this server; if you have questions, ask them.</p>
+
+      <h2>What's stored</h2>
+      <ul>
+        <li><strong>Your account:</strong> username, display name, color, profile picture (if you add one), and when you joined. Your password and recovery codes are stored only as one-way scrambled hashes (scrypt), so nobody can read them, including whoever runs the server.</li>
+        <li><strong>Rooms:</strong> each room's name, the shared prompt and system prompt, the conversation (what was sent and the AI's replies), who wrote and sent each message, which model was used, and token counts.</li>
+        <li><strong>Who has access:</strong> each room's host, members, people who joined through a link, access requests, and people the host removed.</li>
+        <li><strong>Contacts:</strong> who you're connected to, and pending requests.</li>
+        <li><strong>API keys:</strong> encrypted (AES-256-GCM). They're never shown again after you save them; only their last 4 characters are.</li>
+        <li><strong>Sign-in sessions:</strong> a record that your browser is signed in, for up to 30 days. Only a scrambled copy of the session token is stored.</li>
+      </ul>
+      <p>Everything is saved as files on the server running PromptCollab. Nothing is stored anywhere else.</p>
+
+      <h2>Who can see it</h2>
+      <ul>
+        <li><strong>People in a room</strong> see its prompt, conversation, and the names and pictures of others in it.</li>
+        <li><strong>A room's host</strong> also sees who has access and who asked to join.</li>
+        <li><strong>Anyone signed in</strong> can find you by your exact username (to add you as a contact or to a room), and sees your display name and picture.</li>
+        <li><strong>Nobody</strong> sees your API keys, password or recovery codes.</li>
+        <li><strong>Whoever runs the server</strong> can technically read the files, except passwords and codes (hashed) and keys (encrypted).</li>
+      </ul>
+
+      <h2>What's sent to AI companies</h2>
+      <p>Only when someone presses <strong>Send</strong> or <strong>Regenerate</strong>: the prompt, the room's system prompt, and the conversation so far go to the company behind the chosen model (OpenAI, Anthropic, Google or OpenRouter), using the API key of the person who pressed it. What they do with it is covered by that company's own privacy policy. The free demo model sends nothing anywhere.</p>
+
+      <h2>Cookies and tracking</h2>
+      <p>There is exactly one cookie: the one that keeps you signed in. There are no ads, analytics or trackers, and pages load nothing from other websites (even the fonts are served by this server). Your browser also remembers a few preferences locally, like dark mode and whether you've seen the room walkthrough; those never leave your device.</p>
+
+      <h2>Your choices</h2>
+      <ul>
+        <li><strong>Download your data</strong> or <strong>delete your account</strong> from your <a href="/account">account page</a>. Deleting removes your account, keys, picture and contacts, and hands rooms you host to the first person you added (or deletes them).</li>
+        <li><strong>Remove an API key</strong> any time on the <a href="/keys">API keys page</a>.</li>
+        <li>Messages you sent stay in a room's conversation for the people still in it, unless the room is cleared or deleted.</li>
+      </ul>
+    </main>
+  </div>
+  <script type="module" src="/js/theme-only.js"></script>
+</body>
+</html>

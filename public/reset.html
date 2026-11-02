@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reset your password · PromptCollab</title>
+  <!--meta-->
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <div class="auth-page">
+    <header>
+      <a class="logo" href="/"><svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="5" width="26" height="22" rx="6" fill="currentColor"/><path d="M10 13l4 3-4 3" stroke="var(--paper)" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><rect x="17" y="10" width="2.4" height="12" rx="1.2" fill="#3d6bff"/><rect x="21" y="10" width="2.4" height="12" rx="1.2" fill="#e8457c"/></svg> PromptCollab</a>
+      <button class="icon-btn" id="themeBtn" type="button" aria-label="Toggle dark mode"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+    </header>
+
+    <main class="auth-card" id="resetCard">
+      <h1>Reset your password</h1>
+      <p class="auth-sub">Use one of the recovery codes you saved when you signed up. Each code works once.</p>
+
+      <form id="resetForm" novalidate>
+        <div class="field">
+          <label for="username">Username</label>
+          <input id="username" type="text" autocomplete="username" autocapitalize="off" spellcheck="false" required>
+          <p class="field-error" data-for="username"></p>
+        </div>
+        <div class="field">
+          <label for="code">Recovery code</label>
+          <input id="code" type="text" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" placeholder="XXXXX-XXXXX" required>
+          <p class="field-error" data-for="code"></p>
+        </div>
+        <div class="field">
+          <label for="password">New password</label>
+          <input id="password" type="password" autocomplete="new-password" required>
+          <p class="hint">At least 8 characters. You'll be signed out everywhere else.</p>
+          <p class="field-error" data-for="password"></p>
+        </div>
+        <div class="field">
+          <label for="confirm">Confirm new password</label>
+          <input id="confirm" type="password" autocomplete="new-password" required>
+          <p class="field-error" data-for="confirm"></p>
+        </div>
+        <label class="check"><input type="checkbox" id="showPassword"> Show password</label>
+
+        <p class="form-error" id="formError" role="alert"></p>
+        <button class="btn auth-submit" type="submit">Set new password</button>
+      </form>
+
+      <p class="auth-switch">Remembered it? <a href="/signin">Sign in</a></p>
+      <p class="auth-switch fineprint">Lost your codes too? The person running this server can delete your account so you can sign up again.</p>
+    </main>
+
+    <main class="auth-card" id="doneCard" hidden>
+      <h1 tabindex="-1">Password changed</h1>
+      <p class="auth-sub" id="doneText"></p>
+      <a class="btn auth-submit" href="/">Continue</a>
+    </main>
+  </div>
+  <script type="module" src="/js/reset.js"></script>
+</body>
+</html>

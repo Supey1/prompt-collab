@@ -4,6 +4,13 @@ import { avatarContent } from './avatar.js';
 
 bindThemeToggle(document.getElementById('themeBtn'));
 
+// After deleting an account, say so instead of silently showing a signed-out page.
+if (new URLSearchParams(location.search).has('deleted')) {
+  const note = Object.assign(document.createElement('p'), { className: 'banner', role: 'status', textContent: 'Your account was deleted. Thanks for trying PromptCollab.' });
+  document.querySelector('.landing').prepend(note);
+  history.replaceState(null, '', '/');
+}
+
 // Header: Sign in / Sign up buttons, or who you're signed in as.
 showAccount();
 async function showAccount() {
@@ -81,8 +88,8 @@ async function showMyRooms() {
 const el = document.getElementById('demo');
 const tokens = document.getElementById('demoTokens');
 const people = {
-  ana: { name: 'Ana', color: '#3d6bff', pos: 0 },
-  ben: { name: 'Ben', color: '#e8457c', pos: 0 },
+  ana: { name: 'Ana', color: '#2f5be8', pos: 0 },
+  ben: { name: 'Ben', color: '#c92a62', pos: 0 },
 };
 const esc = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 

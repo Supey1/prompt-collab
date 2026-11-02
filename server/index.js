@@ -4,13 +4,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { attachWebSocket } from './ws.js';
-import { loadRoom, createRoom, roomsFor, refreshAccount, validRoomId, saveAll } from './rooms.js';
+import { loadRoom, createRoom, roomsFor, refreshAccount, validRoomId, saveAll, exportRooms, removeAccountFromRooms } from './rooms.js';
 import { PROVIDERS, KEYED, modelsFor, keyFormatProblem, checkKey } from './providers.js';
-import { saveKey, removeKey, keySummary, keysFor } from './keys.js';
+import { saveKey, removeKey, removeAllKeys, keySummary, keysFor } from './keys.js';
 import {
   COOKIE, createAccount, checkPassword, startSession, endSession,
   userFromCookie, readCookie, publicUser, readAvatar,
   updateProfile, changePassword, contactLists, requestContact, acceptContact, disconnect,
+  verifyPassword, newRecoveryCodes, recoveryCodesLeft, resetWithCode, exportAccount, deleteAccountRecord,
 } from './accounts.js';
 
 loadDotEnv();
@@ -37,7 +38,8 @@ const server = http.createServer(async (req, res) => {
   const me = userFromCookie(req.headers.cookie);
   try {
     // ---- accounts ----
-    if (p === '/signup' || p === '/signin') {
+    if (p === '/privacy') return sendFile(res, path.join(ROOT, 'privacy.html'));
+    if (p === '/signup' || p === '/signin' || p === '/reset') {
       if (me) return redirect(res, safeNext(url.searchParams.get('next')));
       return sendFile(res, path.join(ROOT, `${p.slice(1)}.html`));
     }
@@ -49,7 +51,16 @@ const server = http.createServer(async (req, res) => {
       const result = await createAccount(body);
       if (result.error) return json(res, { field: result.field, error: result.error }, 400);
       signIn(req, res, result.user);
-      return json(res, { user: publicUser(result.user) });
+      // Shown once on the sign-up page, so a forgotten password can be reset without email.
+      return json(res, { user: publicUser(result.user), recoveryCodes: await newRecoveryCodes(result.user) });
+    }
+    if (p === '/api/reset' && req.method === 'POST') {
+      const ip = req.socket.remoteAddress;
+      if (tooManyFailures(ip)) return json(res, { error: 'Too many wrong attempts. Try again in 15 minutes.' }, 429);
+      const result = await resetWithCode(await readBody(req, 4096));
+      if (result.error) { if (result.field === 'code') recordFailure(ip); return json(res, result, 400); }
+      signIn(req, res, result.user);
+      return json(res, { user: publicUser(result.user), recoveryCodesLeft: recoveryCodesLeft(result.user) });
     }
     if (p === '/api/signin' && req.method === 'POST') {
       const ip = req.socket.remoteAddress;
@@ -77,7 +88,35 @@ const server = http.createServer(async (req, res) => {
 
     // ---- account page ----
     if (p === '/account') return sendFile(res, path.join(ROOT, 'account.html'));
-    if (p === '/api/account') return json(res, { user: publicUser(me), ...contactLists(me) });
+    if (p === '/api/account') return json(res, { user: publicUser(me), recoveryCodesLeft: recoveryCodesLeft(me), ...contactLists(me) });
+    if (p === '/api/account/recovery' && req.method === 'POST') {
+      const { password } = await readBody(req, 4096);
+      if (!(await verifyPassword(me, password))) return json(res, { field: 'recoveryPassword', error: "That isn't your password." }, 400);
+      return json(res, { codes: await newRecoveryCodes(me) });
+    }
+    if (p === '/api/account/export') {
+      const data = {
+        exportedAt: new Date().toISOString(),
+        note: 'Everything PromptCollab stores about you. Passwords and API keys are never included; keys show only their last 4 characters.',
+        account: exportAccount(me),
+        apiKeys: Object.fromEntries(Object.entries(keySummary(me.id)).map(([k, v]) => [k, { endsWith: v.last4, addedAt: new Date(v.addedAt).toISOString() }])),
+        ...exportRooms(me.id),
+      };
+      res.writeHead(200, {
+        'content-type': 'application/json; charset=utf-8',
+        'content-disposition': `attachment; filename="promptcollab-${me.username}.json"`,
+      });
+      return res.end(JSON.stringify(data, null, 2));
+    }
+    if (p === '/api/account/delete' && req.method === 'POST') {
+      const { password } = await readBody(req, 4096);
+      if (!(await verifyPassword(me, password))) return json(res, { field: 'deletePassword', error: "That isn't your password." }, 400);
+      removeAccountFromRooms(me.id);
+      removeAllKeys(me.id);
+      deleteAccountRecord(me);
+      res.setHeader('set-cookie', `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+      return json(res, { ok: true });
+    }
     if (p === '/api/account/profile' && req.method === 'POST') {
       const result = updateProfile(me, await readBody(req));
       if (result.error) return json(res, result, 400);
@@ -169,7 +208,7 @@ const server = http.createServer(async (req, res) => {
   } catch (e) {
     if (e.message === 'Request too large') return json(res, { error: 'That upload is too large.' }, 413);
     console.error(e);
-    res.writeHead(500).end('Server error');
+    errorPage(res, 500);
   }
 });
 
@@ -220,11 +259,12 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
 
 // ---- helpers ----
 
-function sendFile(res, file) {
+function sendFile(res, file, status = 200) {
   fs.readFile(file, (err, data) => {
     if (err) return notFound(res);
     const ext = path.extname(file);
-    res.writeHead(200, {
+    if (ext === '.html') data = Buffer.from(data.toString('utf8').replace('<!--meta-->', pageMeta(res.req)));
+    res.writeHead(status, {
       'content-type': TYPES[ext] || 'application/octet-stream',
       // Font files never change, so browsers keep them; everything else is re-checked.
       'cache-control': ext === '.woff2' ? 'public, max-age=31536000, immutable' : 'no-cache',
@@ -272,6 +312,44 @@ function signIn(req, res, user) {
   const { token, maxAge } = startSession(user);
   const secure = req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
   res.setHeader('set-cookie', `${COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`);
+}
+
+// ---- link previews ----
+
+const escAttr = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// Tags that make shared links show a preview card (Discord, iMessage, X, Slack...).
+// Room links stay generic so a restricted room's name never leaks.
+function pageMeta(req) {
+  const p = new URL(req.url, 'http://x').pathname;
+  // Previews need full URLs. The Host header comes from the visitor, so only accept a plain host[:port].
+  const host = /^[a-z0-9.-]+(:\d+)?$|^\[[0-9a-f:]+\](:\d+)?$/i.test(req.headers.host || '') ? req.headers.host : `localhost:${PORT}`;
+  const origin = `${isHttps(req) ? 'https' : 'http'}://${host}`;
+  const room = p.startsWith('/r/');
+  const title = room ? "You're invited to a room on PromptCollab" : 'PromptCollab: write the prompt together';
+  const description = room
+    ? 'Join your team to write an AI prompt together, live, then send it to any model.'
+    : 'Your whole team edits one AI prompt live, like a shared doc, then sends it to GPT, Claude, Gemini or hundreds of open models.';
+  const publicPage = p === '/' || p === '/privacy';
+  return [
+    `<meta name="description" content="${escAttr(description)}">`,
+    publicPage ? '' : '<meta name="robots" content="noindex">',
+    '<meta name="theme-color" content="#121722">',
+    '<link rel="apple-touch-icon" href="/apple-touch-icon.png">',
+    '<meta property="og:type" content="website">',
+    '<meta property="og:site_name" content="PromptCollab">',
+    `<meta property="og:title" content="${escAttr(title)}">`,
+    `<meta property="og:description" content="${escAttr(description)}">`,
+    `<meta property="og:url" content="${escAttr(origin + p)}">`,
+    `<meta property="og:image" content="${escAttr(origin)}/og.png">`,
+    '<meta property="og:image:width" content="1200">',
+    '<meta property="og:image:height" content="630">',
+    '<meta property="og:image:alt" content="PromptCollab: two people editing one AI prompt together">',
+    '<meta name="twitter:card" content="summary_large_image">',
+    `<meta name="twitter:title" content="${escAttr(title)}">`,
+    `<meta name="twitter:description" content="${escAttr(description)}">`,
+    `<meta name="twitter:image" content="${escAttr(origin)}/og.png">`,
+  ].filter(Boolean).join('\n  ');
 }
 
 // ---- security ----
@@ -358,7 +436,18 @@ function recordFailure(ip) {
   failures.set(ip, f);
 }
 function redirect(res, to) { res.writeHead(302, { location: to }).end(); }
-function notFound(res) { res.writeHead(404, { 'content-type': 'text/plain' }).end('Not found'); }
+// A styled page for people, JSON for code calling the API.
+function notFound(res) { errorPage(res, 404); }
+function errorPage(res, status) {
+  if (res.headersSent) return res.end();
+  if (new URL(res.req.url, 'http://x').pathname.startsWith('/api/')) {
+    return json(res, { error: status === 404 ? 'Not found.' : 'Something went wrong on the server.' }, status);
+  }
+  let html;
+  try { html = fs.readFileSync(path.join(ROOT, `${status}.html`), 'utf8').replace('<!--meta-->', pageMeta(res.req)); } catch { /* page missing */ }
+  res.writeHead(status, { 'content-type': html ? TYPES['.html'] : 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
+  res.end(html || (status === 404 ? 'Not found' : 'Server error'));
+}
 
 // Tiny .env loader so keys can live in a file without any dependency.
 function loadDotEnv() {

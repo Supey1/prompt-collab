@@ -83,7 +83,8 @@ export function findUser(username) {
   return Object.values(users).find((u) => u.username.toLowerCase() === lower) || null;
 }
 
-export const getUser = (id) => users[id] || null;
+// Object.hasOwn: an id like "__proto__" must not reach the object's prototype.
+export const getUser = (id) => (Object.hasOwn(users, String(id)) ? users[id] : null);
 
 // ---- account page ----
 
@@ -111,21 +112,95 @@ export function updateProfile(user, { displayName, color, avatarMode, avatar }) 
   return { user };
 }
 
+export async function verifyPassword(user, password) {
+  const hash = await hashPassword(String(password || ''), user.salt);
+  return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(user.passwordHash, 'hex'));
+}
+
 // Change the password and sign out every other browser. Returns { ok } or { field, error }.
 export async function changePassword(user, { current, password }, keepToken) {
-  const hash = await hashPassword(String(current || ''), user.salt);
-  if (!crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(user.passwordHash, 'hex'))) {
-    return { field: 'current', error: "That isn't your current password." };
-  }
+  if (!(await verifyPassword(user, current))) return { field: 'current', error: "That isn't your current password." };
   password = String(password || '');
   if (passwordProblem(password)) return { field: 'newPassword', error: passwordProblem(password) };
+  await setPassword(user, password);
+  endSessionsFor(user.id, keepToken);
+  return { ok: true };
+}
+
+async function setPassword(user, password) {
   user.salt = crypto.randomBytes(16).toString('hex');
   user.passwordHash = await hashPassword(password, user.salt);
   saveUsers();
-  const keep = keepToken && tokenHash(keepToken);
-  for (const [k, s] of Object.entries(sessions)) if (s.userId === user.id && k !== keep) delete sessions[k];
-  writeJson(SESSIONS_FILE, sessions);
-  return { ok: true };
+}
+
+// ---- recovery codes (instead of email-based password reset) ----
+
+// Crockford base32: no I, L, O or U, so codes are easy to read and type.
+const CODE_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+const normalizeCode = (code) => String(code || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
+
+// Make 8 new one-time codes (replacing any old ones). Returns them in plain text,
+// once; only scrypt hashes are stored, like passwords.
+export async function newRecoveryCodes(user) {
+  const codes = Array.from({ length: 8 }, () => {
+    const chars = Array.from(crypto.randomBytes(10), (b) => CODE_ALPHABET[b % 32]).join('');
+    return `${chars.slice(0, 5)}-${chars.slice(5)}`;
+  });
+  user.recoverySalt = crypto.randomBytes(16).toString('hex');
+  user.recoveryHashes = await Promise.all(codes.map((c) => hashPassword(normalizeCode(c), user.recoverySalt)));
+  saveUsers();
+  return codes;
+}
+
+export const recoveryCodesLeft = (user) => user.recoveryHashes?.length || 0;
+
+// Reset a forgotten password with a recovery code. The code is used up and every
+// browser is signed out. Returns { user } or { field, error }.
+export async function resetWithCode({ username, code, password }) {
+  const user = findUser(username);
+  const tried = normalizeCode(code);
+  const hash = user?.recoverySalt ? await hashPassword(tried, user.recoverySalt) : await hashPassword(tried, 'no-such-user');
+  const index = user?.recoveryHashes?.findIndex((h) => crypto.timingSafeEqual(Buffer.from(h, 'hex'), Buffer.from(hash, 'hex'))) ?? -1;
+  if (!user || index < 0) return { field: 'code', error: "That username and recovery code don't match." };
+  password = String(password || '');
+  if (passwordProblem(password)) return { field: 'password', error: passwordProblem(password) };
+  user.recoveryHashes.splice(index, 1);
+  await setPassword(user, password);
+  endSessionsFor(user.id);
+  return { user };
+}
+
+// ---- download / delete ----
+
+// Everything stored about someone, minus secrets (password and code hashes).
+export function exportAccount(user) {
+  const lists = contactLists(user);
+  const names = (list) => list.map((u) => `@${u.username} (${u.displayName})`);
+  return {
+    username: user.username,
+    displayName: user.displayName,
+    color: user.color,
+    hasProfilePicture: !!user.avatar,
+    createdAt: new Date(user.createdAt).toISOString(),
+    recoveryCodesLeft: recoveryCodesLeft(user),
+    contacts: names(lists.contacts),
+    contactRequestsToYou: names(lists.incoming),
+    contactRequestsYouSent: names(lists.outgoing),
+  };
+}
+
+// Remove the account itself: its picture, sessions, and every contact link to it.
+// (Rooms and API keys are cleaned up by rooms.js and keys.js.)
+export function deleteAccountRecord(user) {
+  for (const other of Object.values(users)) {
+    if (other.id === user.id) continue;
+    other.contacts = without(contactsOf(other), user.id);
+    other.incoming = without(incomingOf(other), user.id);
+  }
+  if (user.avatar) removeAvatarFile(user.avatar);
+  endSessionsFor(user.id);
+  delete users[user.id];
+  saveUsers();
 }
 
 // ---- contacts (request + accept) ----
@@ -200,6 +275,13 @@ export function startSession(user) {
   return { token, maxAge: SESSION_DAYS * 86400 };
 }
 
+// Sign someone out everywhere, except (optionally) the browser holding keepToken.
+export function endSessionsFor(userId, keepToken) {
+  const keep = keepToken && tokenHash(keepToken);
+  for (const [k, s] of Object.entries(sessions)) if (s.userId === userId && k !== keep) delete sessions[k];
+  writeJson(SESSIONS_FILE, sessions);
+}
+
 export function endSession(token) {
   if (!token || !sessions[tokenHash(token)]) return;
   delete sessions[tokenHash(token)];
@@ -212,7 +294,7 @@ export function userFromCookie(cookieHeader) {
   if (!token) return null;
   const s = sessions[tokenHash(token)];
   if (!s || s.expires < Date.now()) return null;
-  return users[s.userId] || null;
+  return getUser(s.userId);
 }
 
 export function readCookie(header, name) {
@@ -270,7 +352,7 @@ function removeAvatarFile(avatar) {
 
 // { type, bytes } for a user's profile picture, or null.
 export function readAvatar(userId) {
-  const a = users[userId]?.avatar;
+  const a = getUser(userId)?.avatar;
   if (!a) return null;
   try { return { type: a.type, bytes: fs.readFileSync(path.join(AVATAR_DIR, a.file)) }; } catch { return null; }
 }
