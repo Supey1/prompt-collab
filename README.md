@@ -1,8 +1,30 @@
 # PromptCollab
 
+[![Tests](https://github.com/Supey1/prompt-collab/actions/workflows/test.yml/badge.svg)](https://github.com/Supey1/prompt-collab/actions/workflows/test.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Write one AI prompt together, in real time, then send it to any model.
 
 Teams share a room link. Everyone edits the same prompt live, like a shared doc, with name-tagged cursors. When the prompt is ready, anyone sends it to the model the room has picked, whether that's GPT, Claude, Gemini, or any of the hundreds of models on OpenRouter. The reply streams to everyone in the room at once.
+
+![Two people editing one prompt in a PromptCollab room, with the model's reply above](docs/screenshots/room.png)
+
+## Features
+
+- **Live co-editing** with name-tagged cursors (operational transformation, fuzz-tested)
+- **Any model**: OpenAI, Anthropic, Google, or hundreds via OpenRouter, plus a free demo model
+- **Bring your own key**: each person's key pays only for what they send, encrypted at rest
+- **Accounts** with profile pictures, contacts, and recovery codes instead of email resets
+- **Google Docs-style sharing**: every room has a host, who adds or removes people and picks *Restricted* or *Anyone with the link*
+- **Regenerate, edit & resend, copy, undo clear, and export** a conversation as Markdown
+- **Keyboard shortcuts** (press `?` in a room) and a first-visit walkthrough
+- **Download my data** and **delete account**, and a plain-English [privacy page](public/privacy.html)
+- **Dark mode**, works on phones, and passes an automated accessibility audit (axe, WCAG 2.1 AA) in both themes
+- **No dependencies, no trackers**: plain Node.js, fonts served locally
+
+| Share a room | Bring your own key |
+| --- | --- |
+| ![The Share panel, with people who have access and the general access setting](docs/screenshots/share.png) | ![The API keys page with one card per provider](docs/screenshots/keys.png) |
 
 ## Run it
 
@@ -101,10 +123,25 @@ browser ── WebSocket ──► server/index.js
 
 Any host that runs a long-lived Node process with WebSockets works, such as Render, Railway, Fly.io, or a small VPS. Set `KEY_ENCRYPTION_SECRET` (and optionally `ACCESS_CODE`) as environment variables there, serve it over `https://`, and give it a persistent disk for `data/`. Serverless platforms like Vercel or Netlify functions don't keep WebSocket connections open, so they won't work for this app as written.
 
+## Tests
+
+```bash
+npm test
+```
+
+- `test/ot.test.js` fuzz-tests the live editing: simulated people type at once and must end up with identical text.
+- `test/server.test.js` starts a real server with an empty data folder and checks pages, security headers, link previews, sign-up, CSRF protection, password reset with recovery codes, data export, and account deletion.
+
+GitHub Actions runs both on Node 20 and 22 for every push and pull request.
+
+## License
+
+[MIT](LICENSE). The bundled fonts (Inter, Source Serif 4, JetBrains Mono) are under the SIL Open Font License; see `public/fonts/`.
+
 ## Ideas for next steps
 
 - Viewer and editor roles, so some people can read a room without changing the prompt
-- Letting the host hand the room over to someone else, or delete it
+- Letting the host hand the room over to someone else, or delete it, without deleting their account
 - Send one prompt to several models side by side and compare the answers
 - Prompt version history and the ability to branch the conversation
 - Comments and suggestions on parts of the prompt

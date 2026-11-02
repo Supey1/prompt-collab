@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>PromptCollab room</title>
+  <!--meta-->
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/css/app.css">
 </head>
@@ -20,12 +21,16 @@
       <span class="status" id="status" data-state="connecting"><span>Connecting</span></span>
       <div class="avatars" id="avatars" aria-label="People in this room"></div>
       <button class="btn ghost small" id="shareBtn" type="button">Copy invite link</button>
+      <button class="icon-btn" id="shortcutsBtn" type="button" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)" aria-haspopup="dialog">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>
+      </button>
       <button class="icon-btn" id="themeBtn" type="button" aria-label="Toggle dark mode">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
       </button>
     </header>
 
     <main class="thread-wrap" id="threadWrap">
+      <h1 class="visually-hidden" id="roomHeading">Room</h1>
       <div class="thread" id="thread"></div>
     </main>
 
@@ -50,7 +55,7 @@
           <select class="model-select" id="modelSelect" aria-label="Model"></select>
           <span class="tokens" id="tokens">0 tokens</span>
           <div class="spacer"></div>
-          <span class="kbd">Ctrl + Enter</span>
+          <span class="kbd" id="sendKbd">Ctrl + Enter</span>
           <button class="btn" id="sendBtn" type="button">Send to model</button>
         </div>
       </section>
@@ -69,6 +74,38 @@
   </div>
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <!-- Keyboard shortcuts (press ?). -->
+  <dialog id="shortcutsDialog" class="share-dialog" aria-labelledby="shortcutsTitle">
+    <div class="share-head">
+      <h2 id="shortcutsTitle">Keyboard shortcuts</h2>
+      <button class="icon-btn" type="button" data-close aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <dl class="shortcuts">
+      <dt><kbd data-mod>Ctrl</kbd> <kbd>Enter</kbd></dt><dd>Send the prompt to the model</dd>
+      <dt><kbd>Esc</kbd></dt><dd>Stop the reply that's being written</dd>
+      <dt><kbd>/</kbd></dt><dd>Jump to the prompt box</dd>
+      <dt><kbd>?</kbd></dt><dd>Show this list</dd>
+    </dl>
+    <p class="hint">Single-key shortcuts don't fire while you're typing in a box.</p>
+    <div class="share-foot">
+      <button class="btn ghost" type="button" id="replayTour">Show the walkthrough again</button>
+      <button class="btn" type="button" data-close>Done</button>
+    </div>
+  </dialog>
+
+  <!-- First-visit walkthrough card; positioned next to the thing it explains. -->
+  <div class="tour" id="tour" role="dialog" aria-modal="false" aria-labelledby="tourTitle" hidden>
+    <p class="tour-step" id="tourStep"></p>
+    <h2 id="tourTitle"></h2>
+    <p id="tourText"></p>
+    <div class="tour-actions">
+      <button class="btn ghost small" type="button" id="tourSkip">Skip</button>
+      <button class="btn small" type="button" id="tourNext">Next</button>
+    </div>
+  </div>
 
   <!-- The host's Share panel, like Google Docs. -->
   <dialog id="shareDialog" class="share-dialog" aria-labelledby="shareTitle">

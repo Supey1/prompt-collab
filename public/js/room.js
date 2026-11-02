@@ -3,6 +3,7 @@ import { renderMarkdown } from './markdown.js';
 import { estimateTokens } from '../shared/ot.js';
 import { bindThemeToggle } from './theme.js';
 import { avatarContent } from './avatar.js';
+import { copyText } from './clipboard.js';
 
 const roomId = location.pathname.split('/')[2];
 const $ = (id) => document.getElementById(id);
@@ -113,6 +114,7 @@ async function handle(m) {
       setUsers(m.users);
       renderThread();
       updateTokens();
+      maybeStartTour();
       break;
     case 'ack': editors[m.field]?.ack(); break;
     case 'op': editors[m.field]?.remote(m.op, m.rev, m.by); updateWriting(); break;
@@ -170,8 +172,10 @@ async function handle(m) {
 
 function applyRoom(room) {
   state.room = room;
-  if (document.activeElement !== $('roomName')) $('roomName').value = room.name;
+  // Don't overwrite the name box while you're typing in it or your rename hasn't been sent yet.
+  if (document.activeElement !== $('roomName') && !renameTimer) $('roomName').value = room.name;
   document.title = `${room.name} · PromptCollab`;
+  $('roomHeading').textContent = room.name;
   state.model = room.model;
   syncModelSelect();
   const tag = $('accessTag');
@@ -302,8 +306,9 @@ function renderThread() {
   for (const m of state.thread) renderMessage(m);
   if (state.thread.length) {
     const clear = document.createElement('div');
-    clear.style.textAlign = 'center';
-    clear.innerHTML = '<button class="btn ghost small" type="button" data-clear>Clear conversation</button>';
+    clear.className = 'thread-actions';
+    clear.innerHTML = '<button class="btn ghost small" type="button" data-export>Export as Markdown</button>' +
+      '<button class="btn ghost small" type="button" data-clear>Clear conversation</button>';
     root.appendChild(clear);
   }
   scrollDown(true);
@@ -363,6 +368,7 @@ function scrollDown(force) {
 $('thread').addEventListener('click', async (e) => {
   if (e.target.closest('[data-copy-link]')) return copyLink();
   if (e.target.closest('[data-clear]')) return send({ type: 'clear' });
+  if (e.target.closest('[data-export]')) return exportMarkdown();
   if (e.target.closest('[data-regenerate]')) return send({ type: 'regenerate' });
   const copyMsg = e.target.closest('[data-copy-msg]');
   if (copyMsg) {
@@ -392,40 +398,6 @@ function editAndResend(m) {
 }
 
 // ---------- misc ----------
-// Copy text to the clipboard. Browsers only allow this right after a click, so
-// nothing here waits on the network first (Safari is strictest about that).
-// The clipboard API only exists on https:// and localhost; on a plain http://
-// network address we fall back to the older execCommand copy.
-function copyText(text) {
-  if (navigator.clipboard) {
-    return navigator.clipboard.writeText(text).then(() => true, () => legacyCopy(text));
-  }
-  return Promise.resolve(legacyCopy(text));
-}
-
-function legacyCopy(text) {
-  // While a dialog (like Share) is open, the rest of the page is inert and can't
-  // be selected, so the temporary textarea has to go inside the open dialog.
-  const host = document.querySelector('dialog[open]') || document.body;
-  const ta = document.createElement('textarea');
-  ta.value = text;
-  ta.setAttribute('readonly', '');
-  ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;font-size:16px';
-  const focused = document.activeElement;
-  host.appendChild(ta);
-  ta.focus();
-  ta.select();
-  ta.setSelectionRange(0, text.length); // iOS Safari ignores select()
-  let ok = false;
-  // execCommand can report success even when nothing was selected, so check first.
-  if (document.activeElement === ta && ta.selectionEnd - ta.selectionStart === text.length) {
-    try { ok = document.execCommand('copy'); } catch { /* not allowed */ }
-  }
-  ta.remove();
-  focused?.focus?.();
-  return ok;
-}
-
 // A localhost link only works on this computer, so invites use the network
 // address instead. Looked up when the page loads, so copying stays instant.
 let networkUrl = null;
@@ -572,7 +544,7 @@ function renderShare() {
 let renameTimer = null;
 $('roomName').addEventListener('input', () => {
   clearTimeout(renameTimer);
-  renameTimer = setTimeout(() => send({ type: 'rename', name: $('roomName').value }), 400);
+  renameTimer = setTimeout(() => { renameTimer = null; send({ type: 'rename', name: $('roomName').value }); }, 400);
 });
 $('roomName').addEventListener('keydown', (e) => { if (e.key === 'Enter') e.target.blur(); });
 
@@ -591,6 +563,126 @@ function toast(text, action) {
   $('toasts').appendChild(t);
   setTimeout(() => t.remove(), action ? 10000 : 3200);
 }
+
+// ---------- export as Markdown ----------
+function exportMarkdown() {
+  const when = (ts) => new Date(ts).toLocaleString();
+  const name = state.room?.name || 'Untitled prompt';
+  const parts = [`# ${name}`, '', `_Exported from PromptCollab on ${when(Date.now())}_`, ''];
+  const system = systemEd.doc.text.trim();
+  if (system) parts.push('## System prompt', '', system, '');
+  for (const m of state.thread) {
+    if (m.role === 'user') {
+      const authors = (m.authors?.length ? m.authors : [m.sentBy]).filter(Boolean);
+      parts.push('---', '', `### Prompt · written by ${joinNames(authors)}${m.sentBy ? `, sent by ${m.sentBy}` : ''} · ${when(m.ts)}`, '', m.content, '');
+    } else {
+      parts.push(`### Reply · ${labelFor(m.model)} · ${when(m.ts)}`, '', m.content || '_(no text)_', '');
+      if (m.status === 'error') parts.push(`> The model returned an error: ${m.error}`, '');
+      if (m.status === 'stopped') parts.push('> Stopped before finishing.', '');
+    }
+  }
+  const file = `${name.replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-').toLowerCase() || 'conversation'}.md`;
+  const url = URL.createObjectURL(new Blob([parts.join('\n')], { type: 'text/markdown' }));
+  const a = Object.assign(document.createElement('a'), { href: url, download: file });
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast(`Downloaded ${file}`);
+}
+
+// ---------- keyboard shortcuts ----------
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+if (isMac) {
+  $('sendKbd').textContent = '⌘ + Enter';
+  document.querySelectorAll('[data-mod]').forEach((k) => { k.textContent = '⌘'; });
+}
+const openShortcuts = () => { if (!$('shortcutsDialog').open) $('shortcutsDialog').showModal(); };
+$('shortcutsBtn').addEventListener('click', openShortcuts);
+$('shortcutsDialog').addEventListener('click', (e) => { if (e.target.closest('[data-close]')) $('shortcutsDialog').close(); });
+$('replayTour').addEventListener('click', () => { $('shortcutsDialog').close(); startTour(); });
+
+const typingIn = (el) => el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName));
+document.addEventListener('keydown', (e) => {
+  if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (document.querySelector('dialog[open]')) return; // dialogs handle their own keys (Esc closes them)
+  if (e.key === 'Escape') {
+    if (!$('tour').hidden) return endTour();
+    if (state.generating) { e.preventDefault(); send({ type: 'stop' }); toast('Stopped the reply'); }
+    return;
+  }
+  if (typingIn(e.target) || !$('gate').hidden) return;
+  if (e.key === '?') { e.preventDefault(); openShortcuts(); }
+  else if (e.key === '/') { e.preventDefault(); promptEd.focus(); }
+});
+
+// ---------- first-visit walkthrough ----------
+const TOUR_KEY = 'pc-tour-done';
+const tourSteps = () => [
+  {
+    target: $('shareBtn'),
+    title: 'Invite your team',
+    text: isHost()
+      ? 'Share lets you add people by username, or open the room to anyone with the link.'
+      : 'Copy the invite link and send it to teammates so they can join this room.',
+  },
+  {
+    target: $('promptEditor'),
+    title: 'Write the prompt together',
+    text: 'Everyone in the room types in this box at the same time. Colored cursors show who is where.',
+  },
+  {
+    target: $('modelSelect'),
+    title: 'Pick a model and send',
+    text: `Models come from your own API keys (or the free demo). Press Send or ${isMac ? '⌘' : 'Ctrl'} + Enter, and the answer streams to everyone at once.`,
+  },
+];
+let tourIndex = -1;
+
+function maybeStartTour() {
+  if (store.get(TOUR_KEY)) return;
+  setTimeout(startTour, 400);
+}
+
+function startTour() { tourIndex = 0; showTourStep(); }
+
+function showTourStep() {
+  const steps = tourSteps();
+  const step = steps[tourIndex];
+  document.querySelectorAll('.tour-target').forEach((el) => el.classList.remove('tour-target'));
+  if (!step) return endTour();
+  const card = $('tour');
+  $('tourStep').textContent = `Step ${tourIndex + 1} of ${steps.length}`;
+  $('tourTitle').textContent = step.title;
+  $('tourText').textContent = step.text;
+  $('tourNext').textContent = tourIndex === steps.length - 1 ? 'Done' : 'Next';
+  step.target.classList.add('tour-target');
+  card.hidden = false;
+  placeTour(step.target);
+  $('tourNext').focus();
+}
+
+// Put the card just below the target, or above it if there's no room below.
+function placeTour(target) {
+  const card = $('tour');
+  const r = target.getBoundingClientRect();
+  const w = card.offsetWidth, h = card.offsetHeight, gap = 12;
+  const left = Math.min(Math.max(16, r.left + r.width / 2 - w / 2), innerWidth - w - 16);
+  const top = r.bottom + gap + h < innerHeight ? r.bottom + gap : Math.max(16, r.top - gap - h);
+  card.style.left = `${left}px`;
+  card.style.top = `${top}px`;
+}
+
+function endTour() {
+  $('tour').hidden = true;
+  document.querySelectorAll('.tour-target').forEach((el) => el.classList.remove('tour-target'));
+  store.set(TOUR_KEY, true);
+  tourIndex = -1;
+}
+
+$('tourNext').addEventListener('click', () => { tourIndex++; showTourStep(); });
+$('tourSkip').addEventListener('click', endTour);
+addEventListener('resize', () => { if (tourIndex >= 0) placeTour(tourSteps()[tourIndex].target); });
 
 // ---------- start ----------
 (async () => {

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>PromptCollab</title>
-  <meta name="description" content="Write one AI prompt together in real time, then send it to any model.">
+  <!--meta-->
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/css/app.css">
 </head>
@@ -12,7 +12,7 @@
   <div class="landing">
     <header>
       <a class="logo" href="/">
-        <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="5" width="26" height="22" rx="6" fill="currentColor"/><path d="M10 13l4 3-4 3" stroke="var(--paper)" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><rect x="17" y="10" width="2.4" height="12" rx="1.2" fill="#3d6bff"/><rect x="21" y="10" width="2.4" height="12" rx="1.2" fill="#e8457c"/></svg>
+        <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="5" width="26" height="22" rx="6" fill="currentColor"/><path d="M10 13l4 3-4 3" stroke="var(--paper)" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><rect x="17" y="10" width="2.4" height="12" rx="1.2" fill="#2f5be8"/><rect x="21" y="10" width="2.4" height="12" rx="1.2" fill="#c92a62"/></svg>
         PromptCollab
       </a>
       <div class="header-right">
@@ -23,6 +23,7 @@
       </div>
     </header>
 
+    <main>
     <section class="hero">
       <div>
         <h1>Write the prompt together. Send it to any model.</h1>
@@ -37,9 +38,9 @@
         <div class="demo-top">
           <span>Refactor auth middleware</span>
           <span class="avatars">
-            <span class="avatar" style="--c:#3d6bff" data-active>AK</span>
-            <span class="avatar" style="--c:#e8457c" data-active>BO</span>
-            <span class="avatar" style="--c:#13a57a">JL</span>
+            <span class="avatar" style="--c:#2f5be8" data-active>AK</span>
+            <span class="avatar" style="--c:#c92a62" data-active>BO</span>
+            <span class="avatar" style="--c:#0b7a59">JL</span>
           </span>
         </div>
         <div class="demo-body" id="demo"></div>
@@ -69,6 +70,12 @@
         <p>The team agrees on a single prompt before sending, so you spend tokens on one good request instead of several half-finished ones.</p>
       </div>
     </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>PromptCollab</span>
+      <a href="/privacy">Privacy</a>
+    </footer>
   </div>
   <dialog id="joinDialog">
     <form id="joinForm" novalidate>

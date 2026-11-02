@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Sign in · PromptCollab</title>
+  <!--meta-->
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/css/app.css">
 </head>
@@ -27,7 +28,10 @@
           <label for="password">Password</label>
           <input id="password" name="password" type="password" autocomplete="current-password" required>
         </div>
-        <label class="check"><input type="checkbox" id="showPassword"> Show password</label>
+        <div class="check-row">
+          <label class="check"><input type="checkbox" id="showPassword"> Show password</label>
+          <a class="forgot" href="/reset">Forgot password?</a>
+        </div>
 
         <p class="form-error" id="formError" role="alert"></p>
         <button class="btn auth-submit" type="submit">Sign in</button>

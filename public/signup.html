@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Sign up · PromptCollab</title>
+  <!--meta-->
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/css/app.css">
 </head>
@@ -75,6 +76,16 @@
       </form>
 
       <p class="auth-switch">Already have an account? <a id="switchLink" href="/signin">Sign in</a></p>
+      <p class="auth-switch fineprint">By creating an account you agree to how we handle data, explained in the <a href="/privacy">privacy page</a>.</p>
+    </main>
+
+    <!-- Step 2: shown once, right after the account is created. -->
+    <main class="auth-card" id="codesStep" hidden>
+      <h1 tabindex="-1">Save your recovery codes</h1>
+      <p class="auth-sub">If you ever forget your password, one of these codes lets you set a new one. There's no email reset, so <strong>keep them somewhere safe</strong>, like a password manager. Each code works once, and you won't see them again.</p>
+      <div id="codesBox"></div>
+      <label class="check codes-check"><input type="checkbox" id="savedCodes"> I've saved my recovery codes</label>
+      <button class="btn auth-submit" type="button" id="codesContinue" disabled>Continue</button>
     </main>
   </div>
   <script type="module" src="/js/auth.js"></script>

@@ -3,7 +3,8 @@ import { firstLetter } from './avatar.js';
 // The display name + color + letter-or-picture controls, shared by the
 // sign-up page and the account page. Both use the same element ids.
 const $ = (id) => document.getElementById(id);
-const COLORS = ['#3d6bff', '#e8457c', '#13a57a', '#d98a00', '#8b5cf6', '#0e9fbf', '#e4572e', '#4a5468'];
+// Deep enough that white letters on them are readable (4.5:1 contrast or better).
+const COLORS = ['#2f5be8', '#c92a62', '#0b7a59', '#a05f00', '#7148e6', '#08788f', '#bf3f12', '#4a5468'];
 
 // Show each message under its field (by data-for) and focus the first bad field.
 export function setErrors(errors, scope = document) {
@@ -71,8 +72,9 @@ export function setupProfileEditor(initial = {}) {
     const custom = !COLORS.includes(state.color);
     document.querySelectorAll('#colorSwatches button.swatch').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.c === state.color)));
     const customSwatch = document.querySelector('.swatch.custom');
-    customSwatch.setAttribute('aria-checked', String(custom));
+    customSwatch.dataset.selected = String(custom);
     customSwatch.style.setProperty('--c', custom ? state.color : 'transparent');
+    $('customColor').setAttribute('aria-label', custom ? `Custom color ${state.color} (selected)` : 'Choose any color');
     $('customColor').value = state.color;
   }
   render();

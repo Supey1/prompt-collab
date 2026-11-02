@@ -1,5 +1,6 @@
 import { bindThemeToggle } from './theme.js';
 import { setupProfileEditor, setErrors } from './profile-editor.js';
+import { showRecoveryCodes } from './recovery-codes.js';
 
 // Runs both the sign-up and the sign-in page.
 const $ = (id) => document.getElementById(id);
@@ -75,9 +76,20 @@ if ($('signupForm')) {
 
     submitting(e.target, 'Creating account…', async () => {
       const { ok, data } = await post('/api/signup', values);
-      if (ok) { location.href = goTo; return; }
+      if (ok) { showCodesStep(data.recoveryCodes, data.user.username); return; }
       if (data.field) setErrors({ [data.field]: data.error });
       else $('formError').textContent = data.error || 'Something went wrong. Try again.';
     });
   });
+}
+
+// After sign-up: show the recovery codes once, and only continue when they're saved.
+function showCodesStep(codes, username) {
+  if (!codes?.length) { location.href = goTo; return; }
+  document.querySelector('main.auth-card:not(#codesStep)').hidden = true;
+  $('codesStep').hidden = false;
+  showRecoveryCodes($('codesBox'), codes, username);
+  $('savedCodes').addEventListener('change', (e) => { $('codesContinue').disabled = !e.target.checked; });
+  $('codesContinue').addEventListener('click', () => { location.href = goTo; });
+  $('codesStep').querySelector('h1').focus?.();
 }

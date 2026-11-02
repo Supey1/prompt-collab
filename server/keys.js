@@ -67,6 +67,13 @@ export function removeKey(userId, provider) {
   writeJson(KEYS_FILE, store);
 }
 
+// Delete every key someone saved (when they delete their account).
+export function removeAllKeys(userId) {
+  if (!store[userId]) return;
+  delete store[userId];
+  writeJson(KEYS_FILE, store);
+}
+
 // The full key, for sending a request to that provider. Null if missing or
 // unreadable (for example after the encryption secret changed).
 export function getKey(userId, provider) {

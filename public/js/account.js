@@ -1,6 +1,7 @@
 import { bindThemeToggle } from './theme.js';
 import { avatarContent } from './avatar.js';
 import { setupProfileEditor, setErrors } from './profile-editor.js';
+import { showRecoveryCodes } from './recovery-codes.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -112,3 +113,40 @@ $('contacts').addEventListener('click', async (e) => {
   if (res.data.message) say('contactOk', res.data.message);
   if (!res.ok) say('contactError', res.data.error || 'Something went wrong.');
 });
+
+// ---------- recovery codes ----------
+function renderRecoveryStatus(left) {
+  $('recoveryStatus').innerHTML = left
+    ? `You have <strong>${left}</strong> unused recovery code${left === 1 ? '' : 's'}. Use one on the sign-in page if you forget your password.`
+    : '<strong class="danger-text">You have no recovery codes.</strong> If you forget your password you won\'t be able to get back in. Make some now and keep them somewhere safe.';
+}
+renderRecoveryStatus(data.recoveryCodesLeft);
+if (location.hash === '#recovery') $('recovery').scrollIntoView();
+
+$('recoveryForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  setErrors({}, e.target);
+  if (!$('recoveryPassword').value) return setErrors({ recoveryPassword: 'Enter your password.' }, e.target);
+  const res = await api('/api/account/recovery', { password: $('recoveryPassword').value });
+  $('recoveryPassword').value = '';
+  if (!res.ok) return setErrors({ recoveryPassword: res.data.error || 'Something went wrong.' }, e.target);
+  $('newCodes').hidden = false;
+  showRecoveryCodes($('newCodesBox'), res.data.codes, data.user.username);
+  renderRecoveryStatus(res.data.codes.length);
+});
+
+// ---------- delete account ----------
+$('deleteConfirm').addEventListener('change', (e) => { $('deleteBtn').disabled = !e.target.checked; });
+$('deleteForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  setErrors({}, e.target);
+  say('deleteError');
+  if (!$('deletePassword').value) return setErrors({ deletePassword: 'Enter your password.' }, e.target);
+  if (!confirm('Delete your PromptCollab account for good?')) return;
+  const res = await api('/api/account/delete', { password: $('deletePassword').value });
+  $('deletePassword').value = '';
+  if (res.ok) { location.href = '/?deleted=1'; return; }
+  if (res.data.field) setErrors({ [res.data.field]: res.data.error }, e.target);
+  else say('deleteError', res.data.error || 'Something went wrong.');
+});
+

@@ -367,7 +367,8 @@ class Room {
         }
         if (piece.usage) reply.usage = piece.usage;
       }
-      reply.status = 'done';
+      // A provider may simply end its stream when stopped (the demo does) instead of throwing.
+      reply.status = controller.signal.aborted ? 'stopped' : 'done';
     } catch (e) {
       if (controller.signal.aborted) reply.status = 'stopped';
       else {
@@ -459,16 +460,72 @@ export function loadRoom(id) {
 // Rooms someone hosts, was added to, or joined through a link, newest first.
 export function roomsFor(accountId) {
   const out = [];
-  let files = [];
-  try { files = fs.readdirSync(ROOM_DIR).filter((f) => f.endsWith('.json')); } catch { /* no rooms yet */ }
-  for (const f of files) {
-    const room = loadRoom(f.slice(0, -5));
-    const role = room?.roleOf(accountId);
+  for (const room of allRooms()) {
+    const role = room.roleOf(accountId);
     if (!role || room.canEnter(accountId) !== 'ok') continue;
     const updated = Math.max(room.createdAt, ...room.thread.map((m) => m.ts || 0));
     out.push({ ...room.roomInfo(), role, updated, online: room.clients.size });
   }
   return out.sort((a, b) => b.updated - a.updated);
+}
+
+// Every saved room (loading each into memory), for account-wide changes.
+function allRooms() {
+  let files = [];
+  try { files = fs.readdirSync(ROOM_DIR).filter((f) => f.endsWith('.json')); } catch { /* no rooms yet */ }
+  return files.map((f) => loadRoom(f.slice(0, -5))).filter(Boolean);
+}
+
+// For "Download my data": rooms someone hosts in full, and the rooms they're in.
+export function exportRooms(accountId) {
+  const hosted = [], joined = [];
+  for (const room of allRooms()) {
+    const role = room.roleOf(accountId);
+    if (role === 'host') {
+      hosted.push({
+        code: room.id, name: room.name, access: room.access, createdAt: new Date(room.createdAt).toISOString(),
+        systemPrompt: room.docs.system.text, promptDraft: room.docs.prompt.text,
+        conversation: room.thread.map(({ role: r, content, ts, sentBy, authors, model, status }) =>
+          ({ role: r, content, at: new Date(ts).toISOString(), sentBy, writtenBy: authors, model, status })),
+      });
+    } else if (role) {
+      joined.push({ code: room.id, name: room.name, yourRole: role, hostedBy: room.roomInfo().hostName });
+    }
+  }
+  return { roomsYouHost: hosted, roomsYouAreIn: joined };
+}
+
+// When an account is deleted: each room it hosts goes to its first-added member
+// (or is deleted if nobody else was added), and it's removed from every other room.
+export function removeAccountFromRooms(accountId) {
+  for (const room of allRooms()) {
+    const drop = (list) => list.filter((id) => id !== accountId);
+    if (room.owner === accountId) {
+      const heir = room.members[0];
+      if (!heir) { deleteRoom(room); continue; }
+      room.owner = heir;
+      room.members = drop(room.members.slice(1));
+      room.broadcast({ type: 'room', room: room.roomInfo() });
+    }
+    room.members = drop(room.members);
+    room.visitors = drop(room.visitors);
+    room.requests = drop(room.requests);
+    room.removed = drop(room.removed);
+    room.kick(accountId, 'This account was deleted.');
+    room.sendShareState();
+    room.saveNow();
+  }
+}
+
+function deleteRoom(room) {
+  for (const [socket] of [...room.clients]) {
+    socket.send({ type: 'denied', reason: 'missing' });
+    room.leave(socket);
+    setTimeout(() => socket.destroy(), 1000);
+  }
+  clearTimeout(room.saveTimer);
+  rooms.delete(room.id);
+  try { fs.unlinkSync(path.join(ROOM_DIR, `${room.id}.json`)); } catch { /* already gone */ }
 }
 
 // After someone edits their profile, update their name and picture in rooms they're in.
