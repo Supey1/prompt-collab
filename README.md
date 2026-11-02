@@ -64,6 +64,10 @@ Each person adds their own key on the **API keys** page (`/keys`, linked from th
 | Anthropic | Claude models |
 | Google | Gemini models |
 
+**Free models, no card needed:** OpenRouter's free models (IDs ending in `:free`, priced $0) appear in their own **Free** group at the top of the model menu. A free OpenRouter account gives each person 50 messages a day on them.
+
+**Optional house key:** set `OPENROUTER_HOUSE_KEY` to your own free OpenRouter key, and people *without* a key can use the free models too: `HOUSE_DAILY_PER_PERSON` messages each (default 5) per UTC day, out of `HOUSE_DAILY_TOTAL` (default 50, OpenRouter's free limit). The house key is only ever used for free models, never reaches a browser, and failed messages don't count. Set its credit limit to 0 on OpenRouter as a backstop; the server warns at startup if you haven't.
+
 **Whoever presses Send pays, with their own key.** A key is never used for anyone else's messages, and nobody else can see it. The model menu shows the models your keys unlock, read from each provider's live model list.
 
 How keys are protected:
@@ -78,6 +82,9 @@ Settings (`.env`):
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
+| `OPENROUTER_HOUSE_KEY` | none | Your free OpenRouter key, to give people without a key a few free messages a day on free models |
+| `HOUSE_DAILY_PER_PERSON` | `5` | Free messages per person per day with the house key |
+| `HOUSE_DAILY_TOTAL` | `50` | Free messages per day in total (OpenRouter's free accounts allow 50) |
 | `KEY_ENCRYPTION_SECRET` | auto | Encrypts saved keys. If empty, a random one is created in `data/secret.key`. **Set it explicitly when you deploy**, keep it secret, and don't change it, or saved keys must be re-entered. |
 | `PORT` | `3000` | Port to listen on |
 | `ACCESS_CODE` | none | If set, people must also enter this code to join a room |
@@ -117,6 +124,7 @@ browser ── WebSocket ──► server/index.js
   - `data/sessions.json`: who is signed in
   - `data/avatars/`: profile pictures
   - `data/keys.json`: everyone's API keys, encrypted
+  - `data/house-usage.json`: today's free message counts, if the house key is on
   - `data/secret.key`: the encryption key for them, unless `KEY_ENCRYPTION_SECRET` is set
 
 ## Deploying

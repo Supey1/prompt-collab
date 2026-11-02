@@ -170,14 +170,46 @@ const listCache = new Map(); // sha256(provider + key) -> { at, models }
 
 // Models someone can use with their own keys ({ provider: key }), plus the demo.
 // Returns [{ id: 'provider:model', provider, model, providerLabel }]
-export async function modelsFor(keys = {}) {
+// `house`: the site's free house key is on, so free models work without a key.
+// Free models come first, in their own group.
+export async function modelsFor(keys = {}, { house = false } = {}) {
   const out = [];
+  const free = keys.openrouter || house ? [...(await freeModels())] : [];
+  for (const model of free) {
+    out.push({ id: `openrouter:${model}`, provider: 'openrouter', model, label: model.replace(/:free$/, ''), providerLabel: 'Free', free: true });
+  }
   for (const [name, p] of Object.entries(PROVIDERS)) {
     if (p.free ? env('DISABLE_DEMO') === '1' : !keys[name]) continue;
     const models = await listModels(name, keys[name] || 'free');
-    for (const model of models) out.push({ id: `${name}:${model}`, provider: name, model, providerLabel: p.label });
+    for (const model of models) {
+      if (name === 'openrouter' && free.includes(model)) continue; // already listed under Free
+      out.push({ id: `${name}:${model}`, provider: name, model, providerLabel: p.label });
+    }
   }
   return out;
+}
+
+// OpenRouter models that cost nothing: the ID ends in ":free" AND the listed
+// price is $0. Read from OpenRouter's public model list (no key needed).
+let freeCache = { at: 0, models: new Set() };
+export async function freeModels() {
+  if (Date.now() - freeCache.at < LIST_TTL) return freeCache.models;
+  try {
+    const r = await withTimeout(getJSON('https://openrouter.ai/api/v1/models', {}), 8000);
+    const models = r.data
+      .filter((m) => m.id.endsWith(':free') && Number(m.pricing?.prompt) === 0 && Number(m.pricing?.completion) === 0)
+      .map((m) => m.id)
+      .sort();
+    freeCache = { at: Date.now(), models: new Set(models) };
+  } catch (e) {
+    console.warn(`[models] couldn't load OpenRouter's free models (${e.message})`);
+    freeCache.at = Date.now() - LIST_TTL + 60e3; // try again in a minute
+  }
+  return freeCache.models;
+}
+
+export async function isFreeModel(model) {
+  return (await freeModels()).has(model);
 }
 
 async function listModels(name, key) {

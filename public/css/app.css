@@ -238,6 +238,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
   background-position: calc(100% - 16px) 55%, calc(100% - 11px) 55%; background-size: 5px 5px; background-repeat: no-repeat;
 }
 .tokens { font-size: 13px; color: var(--ink-3); }
+.free-left { font-size: 13px; font-weight: 600; color: var(--ok); }
+.free-left[hidden] { display: none; }
 .composer-foot .spacer { flex: 1; }
 .writing { font-size: 13px; color: var(--ink-2); display: inline-flex; gap: 6px; align-items: center; }
 
@@ -403,6 +405,8 @@ kbd { font: 600 12px var(--mono); padding: 3px 7px; border-radius: 6px; border: 
 .key-links { display: flex; gap: 16px; flex-wrap: wrap; margin: 14px 0 0; font-size: 14px; }
 .key-links a { color: var(--ink-2); }
 .danger-text { color: var(--danger) !important; }
+.free-card { border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); }
+.free-card p { margin: 0; color: var(--ink-2); font-size: 15px; line-height: 1.6; }
 .safety { margin: 0; padding-left: 18px; color: var(--ink-2); font-size: 14px; display: grid; gap: 6px; }
 
 /* room: access label, no-access screen, Share panel */

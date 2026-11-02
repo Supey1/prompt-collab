@@ -97,6 +97,7 @@ async function handle(m) {
       $('shareDialog').close();
       return showGate(m.reason, m.hostName, m.message);
     case 'share': state.share = m; renderShare(); break;
+    case 'house': state.house = { ...state.house, ...m.house }; updateFreeLeft(); break;
     case 'auth':
       state.ws.onclose = null; state.ws.close();
       await askCode();
@@ -220,9 +221,21 @@ function updateWriting() {
 async function loadModels() {
   try {
     const r = await fetch('/api/models');
-    state.models = (await r.json()).models;
+    const data = await r.json();
+    state.models = data.models;
+    state.house = data.house;
   } catch { state.models = []; }
   syncModelSelect();
+}
+
+// "Free messages left today: 3 of 5", shown while a free model runs on the site's house key.
+function updateFreeLeft() {
+  const el = $('freeLeft');
+  const h = state.house;
+  // A new room has no model until the first Send, so follow what the menu shows.
+  const model = state.models.find((m) => m.id === (state.model || $('modelSelect').value));
+  el.hidden = !(h?.enabled && h.usingHouse && model?.free);
+  if (!el.hidden) el.textContent = `${h.left} of ${h.perPerson} free left today`;
 }
 
 // The menu lists the models your own keys unlock. If the room uses a model you
@@ -232,7 +245,7 @@ function syncModelSelect() {
   const groups = {};
   for (const m of state.models) (groups[m.providerLabel] ||= []).push(m);
   let html = Object.entries(groups).map(([g, ms]) =>
-    `<optgroup label="${esc(g)}">${ms.map((m) => `<option value="${esc(m.id)}">${esc(m.model)}</option>`).join('')}</optgroup>`
+    `<optgroup label="${esc(g === 'Free' ? 'Free models' : g)}">${ms.map((m) => `<option value="${esc(m.id)}">${esc(m.label || m.model)}</option>`).join('')}</optgroup>`
   ).join('');
   if (state.model && !state.models.some((m) => m.id === state.model)) {
     const [provider, ...rest] = state.model.split(':');
@@ -243,12 +256,13 @@ function syncModelSelect() {
   const sel = $('modelSelect');
   sel.innerHTML = html;
   if (state.model) sel.value = state.model;
+  updateFreeLeft();
 }
 
 // Coming back from adding a key in another tab: show the new models.
 document.addEventListener('visibilitychange', () => { if (!document.hidden) loadModels(); });
 
-const labelFor = (id) => state.models.find((m) => m.id === id)?.model || id?.split(':').slice(1).join(':') || 'a model';
+const labelFor = (id) => { const m = state.models.find((x) => x.id === id); return m?.label || m?.model || id?.split(':').slice(1).join(':').replace(/:free$/, '') || 'a model'; };
 
 $('modelSelect').addEventListener('change', (e) => {
   if (e.target.value === ADD_KEY) {
@@ -259,6 +273,7 @@ $('modelSelect').addEventListener('change', (e) => {
   }
   state.model = e.target.value;
   send({ type: 'model', model: e.target.value });
+  updateFreeLeft();
 });
 
 // ---------- sending ----------

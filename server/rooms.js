@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { DocState } from './doc.js';
-import { parseModel, modelsFor, redact } from './providers.js';
+import { parseModel, modelsFor, redact, isFreeModel } from './providers.js';
+import { houseEnabled, houseStatus, takeHouseMessage, giveBackHouseMessage, markHousePoolEmpty } from './house.js';
 import { keysFor } from './keys.js';
 import { getUser, findUser, publicUser, contactLists } from './accounts.js';
 
@@ -319,12 +320,26 @@ class Room {
   async modelFor(socket, user) {
     const keys = keysFor(user.accountId);
     if (!this.model) {
-      this.model = (await modelsFor(keys))[0]?.id || null;
+      this.model = (await modelsFor(keys, { house: houseEnabled() }))[0]?.id || null;
       this.broadcast({ type: 'room', room: this.roomInfo() });
     }
     const m = this.model && parseModel(this.model);
     if (!m) { socket.send({ type: 'notice', message: 'Pick a model first.' }); return null; }
     const key = m.provider.free ? 'demo' : keys[m.name];
+    // No key of their own: the site's house key covers OpenRouter's free models only.
+    if (!key && m.name === 'openrouter' && houseEnabled() && await isFreeModel(m.model)) {
+      const taken = takeHouseMessage(user.accountId);
+      if (taken.key) return { provider: m.provider, model: m.model, key: taken.key, house: true };
+      const { perPerson } = houseStatus(user.accountId);
+      socket.send({
+        type: 'notice',
+        message: taken.error === 'person'
+          ? `You've used your ${perPerson} free messages for today. They reset at midnight UTC. Add your own free OpenRouter key (no card needed) for 50 a day.`
+          : "This site's free messages are used up for today. They reset at midnight UTC. Add your own free OpenRouter key (no card needed) to keep going.",
+        action: { label: 'Add key', href: '/keys' },
+      });
+      return null;
+    }
     if (!key) {
       socket.send({
         type: 'notice',
@@ -376,6 +391,13 @@ class Room {
         reply.status = 'error';
         reply.error = redact(e.message, resolved.key);
         console.warn('[send]', reply.error);
+        if (resolved.house) {
+          giveBackHouseMessage(user.accountId); // a failed message doesn't count
+          if (/^429/.test(reply.error)) {
+            markHousePoolEmpty();
+            reply.error = "This free model is busy, or the site's free messages are used up for today. Try another free model, try again later, or add your own free OpenRouter key.";
+          }
+        }
       }
     } finally {
       clearTimeout(flushTimer);
@@ -388,6 +410,7 @@ class Room {
       this.broadcast({ type: 'done', id: reply.id, status: reply.status, error: reply.error, usage: reply.usage, content: reply.content });
       this.broadcast({ type: 'usage', usage: this.usage });
       this.broadcast({ type: 'generating', generating: null });
+      if (resolved.house) for (const [s, u] of this.clients) if (u.accountId === user.accountId) s.send({ type: 'house', house: houseStatus(user.accountId) });
       this.scheduleSave();
     }
   }

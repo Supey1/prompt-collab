@@ -26,6 +26,7 @@
         <li><strong>Who has access:</strong> each room's host, members, people who joined through a link, access requests, and people the host removed.</li>
         <li><strong>Contacts:</strong> who you're connected to, and pending requests.</li>
         <li><strong>API keys:</strong> encrypted (AES-256-GCM). They're never shown again after you save them; only their last 4 characters are.</li>
+        <li><strong>Free message counts:</strong> how many free messages each person used today, if the site offers them. Reset daily.</li>
         <li><strong>Sign-in sessions:</strong> a record that your browser is signed in, for up to 30 days. Only a scrambled copy of the session token is stored.</li>
       </ul>
       <p>Everything is saved as files on the server running PromptCollab. Nothing is stored anywhere else.</p>
@@ -41,6 +42,7 @@
 
       <h2>What's sent to AI companies</h2>
       <p>Only when someone presses <strong>Send</strong> or <strong>Regenerate</strong>: the prompt, the room's system prompt, and the conversation so far go to the company behind the chosen model (OpenAI, Anthropic, Google or OpenRouter), using the API key of the person who pressed it. What they do with it is covered by that company's own privacy policy. The free demo model sends nothing anywhere.</p>
+      <p><strong>Free models without a key:</strong> if this site offers free messages, they're sent to OpenRouter using the site owner's account, so OpenRouter sees them as coming from that account. Some free models run on providers that may use prompts to train their AI, depending on that account's OpenRouter privacy settings. Don't put anything private into a free model. With your own key, your own OpenRouter settings apply instead. To count your daily free messages, the server stores how many you've used today; that count is reset every day.</p>
 
       <h2>Cookies and tracking</h2>
       <p>There is exactly one cookie: the one that keeps you signed in. There are no ads, analytics or trackers, and pages load nothing from other websites (even the fonts are served by this server). Your browser also remembers a few preferences locally, like dark mode and whether you've seen the room walkthrough; those never leave your device.</p>
