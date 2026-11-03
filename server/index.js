@@ -273,8 +273,9 @@ function sendFile(res, file, status = 200) {
     if (ext === '.html') data = Buffer.from(data.toString('utf8').replace('<!--meta-->', pageMeta(res.req)));
     res.writeHead(status, {
       'content-type': TYPES[ext] || 'application/octet-stream',
-      // Font files never change, so browsers keep them; everything else is re-checked.
-      'cache-control': ext === '.woff2' ? 'public, max-age=31536000, immutable' : 'no-cache',
+      // Font files and versioned libraries (/vendor/name-1.2.3/) never change, so browsers
+      // keep them; everything else is re-checked.
+      'cache-control': ext === '.woff2' || file.includes(`${path.sep}vendor${path.sep}`) ? 'public, max-age=31536000, immutable' : 'no-cache',
     });
     res.end(data);
   });

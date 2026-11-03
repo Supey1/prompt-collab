@@ -16,6 +16,7 @@ Teams share a room link. Everyone edits the same prompt live, like a shared doc,
 - **Bring your own key**: each person's key pays only for what they send, encrypted at rest
 - **Accounts** with profile pictures, contacts, and recovery codes instead of email resets
 - **Google Docs-style sharing**: every room has a host, who adds or removes people and picks *Restricted* or *Anyone with the link*
+- **Math that reads like math**: LaTeX in replies (`$...$`, `$$...$$`, `\(...\)`, `\[...\]`, `\begin{align}`) is rendered with KaTeX, loaded only when a reply has math
 - **Regenerate, edit & resend, copy, undo clear, and export** a conversation as Markdown
 - **Keyboard shortcuts** (press `?` in a room) and a first-visit walkthrough
 - **Download my data** and **delete account**, and a plain-English [privacy page](public/privacy.html)
@@ -138,13 +139,14 @@ npm test
 ```
 
 - `test/ot.test.js` fuzz-tests the live editing: simulated people type at once and must end up with identical text.
+- `test/markdown.test.js` checks which parts of a reply count as LaTeX math (and that prices like "$5 and $10", code, and HTML don't).
 - `test/server.test.js` starts a real server with an empty data folder and checks pages, security headers, link previews, sign-up, CSRF protection, password reset with recovery codes, data export, and account deletion.
 
 GitHub Actions runs both on Node 20 and 22 for every push and pull request.
 
 ## License
 
-[MIT](LICENSE). The bundled fonts (Inter, Source Serif 4, JetBrains Mono) are under the SIL Open Font License; see `public/fonts/`.
+[MIT](LICENSE). The bundled fonts (Inter, Source Serif 4, JetBrains Mono) are under the SIL Open Font License; see `public/fonts/`. [KaTeX](https://katex.org) (MIT) is bundled in `public/vendor/`.
 
 ## Ideas for next steps
 

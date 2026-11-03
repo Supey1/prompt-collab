@@ -1,5 +1,5 @@
 import { SharedEditor } from './editor.js';
-import { renderMarkdown } from './markdown.js';
+import { renderMarkdown, whenMathReady } from './markdown.js';
 import { estimateTokens } from '../shared/ot.js';
 import { bindThemeToggle } from './theme.js';
 import { avatarContent } from './avatar.js';
@@ -578,6 +578,9 @@ function toast(text, action) {
   $('toasts').appendChild(t);
   setTimeout(() => t.remove(), action ? 10000 : 3200);
 }
+
+// KaTeX loads the first time a reply contains math: redraw replies with real equations.
+whenMathReady(() => { for (const m of state.thread) if (m.role === 'assistant') renderMessage(m); });
 
 // ---------- export as Markdown ----------
 function exportMarkdown() {
