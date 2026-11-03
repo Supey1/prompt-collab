@@ -64,7 +64,7 @@ Each person adds their own key on the **API keys** page (`/keys`, linked from th
 | Anthropic | Claude models |
 | Google | Gemini models |
 
-**Free models, no card needed:** OpenRouter's free models (IDs ending in `:free`, priced $0) appear in their own **Free** group at the top of the model menu. A free OpenRouter account gives each person 50 messages a day on them.
+**Free models, no card needed:** OpenRouter's free models (IDs ending in `:free`, priced $0) appear in their own **Free** group at the top of the model menu, well-known chat models first; free models that can't chat (safety classifiers) are hidden. A free OpenRouter account gives each person 50 messages a day on them. Free models are often busy, so each request also lists up to two other *free* models for OpenRouter to fall back on, and the reply shows which model answered.
 
 **Optional house key:** set `OPENROUTER_HOUSE_KEY` to your own free OpenRouter key, and people *without* a key can use the free models too: `HOUSE_DAILY_PER_PERSON` messages each (default 5) per UTC day, out of `HOUSE_DAILY_TOTAL` (default 50, OpenRouter's free limit). The house key is only ever used for free models, never reaches a browser, and failed messages don't count. Set its credit limit to 0 on OpenRouter as a backstop; the server warns at startup if you haven't.
 

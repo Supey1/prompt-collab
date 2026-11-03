@@ -17,14 +17,21 @@ Object.assign(process.env, {
   KEY_ENCRYPTION_SECRET: 'test-secret-that-is-long-enough-123',
 });
 
-// Fake OpenRouter: one truly free model, one that says ":free" but has a price, one paid.
+// Fake OpenRouter: one truly free model, one that says ":free" but has a price,
+// a free model that can't chat (a safety classifier), and a paid one.
+// `freeLeft` is what OpenRouter reports as this key's free requests left today.
+let freeLeft = 50;
 globalThis.fetch = async (url) => {
   if (String(url).startsWith('https://openrouter.ai/api/v1/models')) {
     return new Response(JSON.stringify({ data: [
       { id: 'meta/llama-free:free', pricing: { prompt: '0', completion: '0' } },
       { id: 'tricky/priced:free', pricing: { prompt: '0.000001', completion: '0' } },
+      { id: 'acme/content-safety:free', pricing: { prompt: '0', completion: '0' } },
       { id: 'openai/gpt-5', pricing: { prompt: '0.00001', completion: '0.00003' } },
     ] }), { status: 200 });
+  }
+  if (String(url) === 'https://openrouter.ai/api/v1/key') {
+    return new Response(JSON.stringify({ data: { limit: 0, free_model_daily_requests: { used: 50 - freeLeft, limit: 50, remaining: freeLeft } } }), { status: 200 });
   }
   throw new Error(`unexpected request to ${url}`);
 };
@@ -33,7 +40,7 @@ try {
   const { createRoom } = await import('../server/rooms.js');
   const { saveKey } = await import('../server/keys.js');
   const { modelsFor } = await import('../server/providers.js');
-  const { houseStatus, giveBackHouseMessage } = await import('../server/house.js');
+  const { houseStatus, giveBackHouseMessage, syncHousePool } = await import('../server/house.js');
 
   // Ask a room for the key it would use when `who` presses Send with `model`.
   const notices = [];
@@ -78,6 +85,25 @@ try {
   assert.equal(menu[0].free, true, 'free models come first');
   assert.ok(!JSON.stringify(menu).includes(HOUSE) && !JSON.stringify(houseStatus('ana')).includes(HOUSE));
   assert.equal((await modelsFor({}, { house: false })).filter((m) => m.free).length, 0, 'no free models without a key or house key');
+
+  // A 429 can mean "busy", not "used up": only OpenRouter's own count may empty the pool.
+  // (The bug: one busy model set everyone to 0 of 5 for the rest of the day.)
+  freeLeft = 49;
+  assert.equal(await syncHousePool(), 49);
+  assert.equal(houseStatus('erin').left, 2, 'a busy model must not use up everyone\'s messages');
+  freeLeft = 0;
+  assert.equal(await syncHousePool(), 0);
+  assert.equal(houseStatus('erin').left, 0, 'OpenRouter says none left today');
+  freeLeft = 49; // (this test's daily total is 3, so 1 used leaves 2)
+  await syncHousePool();
+  assert.equal(houseStatus('erin').left, 2, 'a wrong count heals from OpenRouter');
+
+  // Backup models for a busy free model: only other free models that can chat, at most 2.
+  room.model = 'openrouter:meta/llama-free:free';
+  const sent = await room.modelFor(socket, { accountId: 'dana' });
+  assert.deepEqual(sent.fallbacks, [], 'no other chat-capable free models in this list');
+  const { freeModels } = await import('../server/providers.js');
+  assert.ok(!(await freeModels()).some((m) => /content-safety/.test(m)), 'non-chat models are hidden');
 
   // With no house key set, it's off and never used.
   const off = spawnSync(process.execPath, ['--input-type=module', '-e',

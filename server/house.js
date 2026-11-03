@@ -80,10 +80,24 @@ export function giveBackHouseMessage(accountId) {
   save();
 }
 
-// OpenRouter says its free messages are used up for today (429): stop until tomorrow.
-export function markHousePoolEmpty() {
-  current().total = TOTAL;
-  save();
+// Ask OpenRouter how many free requests this key really has left today, and
+// line our count up with it. OpenRouter is the source of truth: a 429 can mean
+// "this model is busy right now" just as well as "today's free requests are used up".
+// Returns the number left, or null if OpenRouter couldn't be asked.
+export async function syncHousePool() {
+  if (!houseEnabled()) return null;
+  try {
+    const res = await fetch('https://openrouter.ai/api/v1/key', { headers: { Authorization: `Bearer ${KEY}` }, signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+    const free = (await res.json()).data?.free_model_daily_requests;
+    if (!free || !Number.isFinite(free.remaining)) return null;
+    const u = current();
+    u.total = free.remaining <= 0 ? TOTAL : Math.min(TOTAL, Math.max(0, free.used | 0));
+    save();
+    return free.remaining;
+  } catch {
+    return null;
+  }
 }
 
 // At startup: check the key works, and warn if it could ever spend money.
@@ -94,6 +108,7 @@ export async function checkHouseKey() {
     if (!res.ok) { console.warn(`[house] OpenRouter rejected OPENROUTER_HOUSE_KEY (${res.status}). Free messages won't work until it's fixed.`); return; }
     const { data } = await res.json();
     const free = data.free_model_daily_requests;
+    await syncHousePool(); // also repairs a count that's out of step with OpenRouter
     console.log(`Free messages: on (${PER_PERSON} per person per day${free ? `; OpenRouter allows this key ${free.limit} today, ${free.remaining} left` : ''}).`);
     if (data.limit !== 0) {
       console.warn('[house] Safety tip: set this key\'s credit limit to 0 on openrouter.ai (Settings > Keys), so it can never spend money even by mistake.');
