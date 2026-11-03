@@ -23,6 +23,12 @@ export const houseEnabled = () => /^sk-or-[A-Za-z0-9_-]{20,}$/.test(KEY);
 if (KEY && !houseEnabled()) console.warn('[house] OPENROUTER_HOUSE_KEY doesn\'t look like an OpenRouter key (it starts with sk-or-). Free messages are off.');
 
 const today = () => new Date().toISOString().slice(0, 10); // UTC, the same day OpenRouter uses
+
+// When today's free messages reset: the next midnight UTC, as an ISO time.
+// Browsers show it in each person's own time zone.
+export function nextResetAt(now = new Date()) {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)).toISOString();
+}
 let usage = readUsage();
 
 function readUsage() {
@@ -55,6 +61,7 @@ export function houseStatus(accountId) {
     perPerson: PER_PERSON,
     left: Math.max(0, Math.min(PER_PERSON - used, TOTAL - u.total)),
     poolEmpty: u.total >= TOTAL,
+    resetsAt: nextResetAt(),
   };
 }
 

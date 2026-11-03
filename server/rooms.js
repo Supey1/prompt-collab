@@ -330,12 +330,14 @@ class Room {
     if (!key && m.name === 'openrouter' && houseEnabled() && await isFreeModel(m.model)) {
       const taken = takeHouseMessage(user.accountId);
       if (taken.key) return { provider: m.provider, model: m.model, key: taken.key, house: true, fallbacks: await freeFallbacks(m.model) };
-      const { perPerson } = houseStatus(user.accountId);
+      const { perPerson, resetsAt } = houseStatus(user.accountId);
       socket.send({
         type: 'notice',
+        // {reset} is filled in by the browser, in that person's own time zone.
+        resetsAt,
         message: taken.error === 'person'
-          ? `You've used your ${perPerson} free messages for today. They reset at midnight UTC. Add your own free OpenRouter key (no card needed) for 50 a day.`
-          : "This site's free messages are used up for today. They reset at midnight UTC. Add your own free OpenRouter key (no card needed) to keep going.",
+          ? `You've used your ${perPerson === 1 ? 'free message' : `${perPerson} free messages`} for today. They reset {reset}. Add your own free OpenRouter key (no card needed) for 50 a day.`
+          : "This site's free messages are used up for today. They reset {reset}. Add your own free OpenRouter key (no card needed) to keep going.",
         action: { label: 'Add key', href: '/keys' },
       });
       return null;

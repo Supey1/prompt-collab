@@ -1,4 +1,5 @@
 import { bindThemeToggle } from './theme.js';
+import { resetPhrase } from './reset-time.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -31,7 +32,8 @@ function renderFree() {
   if (own) {
     $('freeText').innerHTML = 'Your own OpenRouter key covers the <strong>Free models</strong> in every room: up to 50 messages a day on a free OpenRouter account.';
   } else if (h.enabled) {
-    $('freeText').innerHTML = `You can use the <strong>Free models</strong> in any room without adding a key: <strong>${h.left} of ${h.perPerson}</strong> free messages left today (resets at midnight UTC). ` +
+    $('freeText').innerHTML = `You can use the <strong>Free models</strong> in any room without adding a key: <strong>${h.left} of ${h.perPerson}</strong> free messages left today. ` +
+      `They reset <strong>${resetPhrase(h.resetsAt)}</strong>. ` +
       'For more, make a free OpenRouter account (no card needed) and add its key below: that gives you 50 a day of your own.';
   } else {
     $('freeText').innerHTML = 'Want to try real AI for free? Make a free OpenRouter account (no card needed), create a key, and add it in the OpenRouter box below. ' +
@@ -136,3 +138,13 @@ $('providers').addEventListener('submit', async (e) => {
 
 const res = await api('/api/keys');
 if (res.ok) { page = res.data; render(); }
+
+// Keep the reset countdown current; fetch the fresh allowance once the reset time passes.
+setInterval(async () => {
+  if (!page?.house?.enabled) return;
+  if (Date.now() >= new Date(page.house.resetsAt)) {
+    const fresh = await api('/api/keys');
+    if (fresh.ok) page = fresh.data;
+  }
+  renderFree();
+}, 60000);

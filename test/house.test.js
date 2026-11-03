@@ -40,11 +40,12 @@ try {
   const { createRoom } = await import('../server/rooms.js');
   const { saveKey } = await import('../server/keys.js');
   const { modelsFor } = await import('../server/providers.js');
-  const { houseStatus, giveBackHouseMessage, syncHousePool } = await import('../server/house.js');
+  const { houseStatus, giveBackHouseMessage, syncHousePool, nextResetAt } = await import('../server/house.js');
 
   // Ask a room for the key it would use when `who` presses Send with `model`.
   const notices = [];
-  const socket = { send: (m) => { if (m.type === 'notice') notices.push(m.message); } };
+  const noticeData = [];
+  const socket = { send: (m) => { if (m.type === 'notice') { notices.push(m.message); noticeData.push(m); } } };
   const room = createRoom('owner');
   async function keyFor(who, model) {
     room.model = model;
@@ -61,7 +62,16 @@ try {
   assert.equal(await keyFor('ana', 'openrouter:meta/llama-free:free'), 'HOUSE');
   assert.equal(await keyFor('ana', 'openrouter:meta/llama-free:free'), null);
   assert.match(notices.at(-1), /used your 2 free messages/);
-  assert.deepEqual(houseStatus('ana'), { enabled: true, perPerson: 2, left: 0, poolEmpty: false });
+  // The notice says when they come back; each browser fills in its own local time.
+  assert.match(notices.at(-1), /reset \{reset\}/);
+  assert.equal(noticeData.at(-1).resetsAt, nextResetAt());
+  assert.deepEqual(houseStatus('ana'), { enabled: true, perPerson: 2, left: 0, poolEmpty: false, resetsAt: nextResetAt() });
+
+  // Free messages reset at the next midnight UTC (the same day boundary OpenRouter uses).
+  assert.equal(nextResetAt(new Date('2026-11-03T16:30:00Z')), '2026-11-04T00:00:00.000Z');
+  assert.equal(nextResetAt(new Date('2026-11-03T23:59:59Z')), '2026-11-04T00:00:00.000Z');
+  assert.equal(nextResetAt(new Date('2026-11-04T00:00:00Z')), '2026-11-05T00:00:00.000Z');
+  assert.equal(nextResetAt(new Date('2026-12-31T20:00:00Z')), '2027-01-01T00:00:00.000Z', 'across a year change');
 
   // A failed message is given back.
   giveBackHouseMessage('ana');
