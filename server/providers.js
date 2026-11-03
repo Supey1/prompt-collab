@@ -115,10 +115,13 @@ export const PROVIDERS = {
       const r = await getJSON('https://openrouter.ai/api/v1/models', {});
       return r.data.map((m) => m.id);
     },
-    stream: (key, model, system, messages, signal) => openAICompatible(
+    // `fallbacks`: other free models OpenRouter tries if this one is busy. Only ever
+    // free ones: OpenRouter bills at the price of whichever model answers.
+    stream: (key, model, system, messages, signal, { fallbacks = [] } = {}) => openAICompatible(
       'https://openrouter.ai/api/v1/chat/completions',
       { Authorization: `Bearer ${key}`, 'X-Title': 'PromptCollab' },
-      model, system, messages, signal),
+      model, system, messages, signal,
+      fallbacks.length ? { models: [model, ...fallbacks] } : {}),
   },
 
   demo: {
@@ -191,7 +194,15 @@ export async function modelsFor(keys = {}, { house = false } = {}) {
 
 // OpenRouter models that cost nothing: the ID ends in ":free" AND the listed
 // price is $0. Read from OpenRouter's public model list (no key needed).
-let freeCache = { at: 0, models: new Set() };
+let freeCache = { at: 0, models: [] };
+
+// Free models that can't hold a conversation (they only classify text).
+const NOT_CHAT = /(content-safety|guard|moderation|embed|rerank)/i;
+// Well-known general chat models first, so the default is a good one; then
+// specialised, preview and very small models.
+const WELL_KNOWN = /^(google\/gemma|meta-llama\/|deepseek\/|qwen\/|mistralai\/|openai\/|nvidia\/nemotron-3-ultra)/;
+const SPECIALISED = /(code|coder|preview|-vl|vision|nano|mini|small|lfm|\b\d(\.\d)?b\b)/i;
+const freeRank = (id) => (WELL_KNOWN.test(id) ? 0 : 2) + (SPECIALISED.test(id) ? 1 : 0);
 export async function freeModels() {
   if (Date.now() - freeCache.at < LIST_TTL) return freeCache.models;
   try {
@@ -199,8 +210,9 @@ export async function freeModels() {
     const models = r.data
       .filter((m) => m.id.endsWith(':free') && Number(m.pricing?.prompt) === 0 && Number(m.pricing?.completion) === 0)
       .map((m) => m.id)
-      .sort();
-    freeCache = { at: Date.now(), models: new Set(models) };
+      .filter((id) => !NOT_CHAT.test(id))
+      .sort((a, b) => freeRank(a) - freeRank(b) || a.localeCompare(b));
+    freeCache = { at: Date.now(), models };
   } catch (e) {
     console.warn(`[models] couldn't load OpenRouter's free models (${e.message})`);
     freeCache.at = Date.now() - LIST_TTL + 60e3; // try again in a minute
@@ -209,7 +221,12 @@ export async function freeModels() {
 }
 
 export async function isFreeModel(model) {
-  return (await freeModels()).has(model);
+  return (await freeModels()).includes(model);
+}
+
+// Up to 2 other free models to fall back on, best first (OpenRouter takes at most 3 in total).
+export async function freeFallbacks(model) {
+  return (await freeModels()).filter((m) => m !== model).slice(0, 2);
 }
 
 async function listModels(name, key) {
@@ -244,22 +261,28 @@ export function parseModel(id) {
 
 // ---- helpers --------------------------------------------------------------
 
-async function* openAICompatible(url, headers, model, system, messages, signal) {
+async function* openAICompatible(url, headers, model, system, messages, signal, extra = {}) {
+  const body = {
+    model, stream: true, stream_options: { include_usage: true },
+    messages: [...(system ? [{ role: 'system', content: system }] : []),
+      ...messages.map((m) => ({ role: m.role, content: m.content }))],
+    ...extra,
+  };
+  if (extra.models) delete body.model; // OpenRouter: the `models` list replaces `model`
   const res = await fetch(url, {
     method: 'POST', signal,
     headers: { 'content-type': 'application/json', ...headers },
-    body: JSON.stringify({
-      model, stream: true, stream_options: { include_usage: true },
-      messages: [...(system ? [{ role: 'system', content: system }] : []),
-        ...messages.map((m) => ({ role: m.role, content: m.content }))],
-    }),
+    body: JSON.stringify(body),
   });
   await ensureOk(res);
   let usage = null;
+  let servedBy = null;
   for await (const data of sse(res)) {
     if (data === '[DONE]') break;
     const ev = JSON.parse(data);
-    if (ev.error) throw new Error(ev.error.message || 'Provider error');
+    if (ev.error) throw providerError(ev.error.code, '', ev.error);
+    // With fallbacks, say which model actually answered.
+    if (ev.model && !servedBy) { servedBy = ev.model; yield { servedBy }; }
     const t = ev.choices?.[0]?.delta?.content;
     if (t) yield { text: t };
     if (ev.usage) usage = { input: ev.usage.prompt_tokens || 0, output: ev.usage.completion_tokens || 0 };
@@ -286,12 +309,22 @@ async function* sse(res) {
 
 async function ensureOk(res) {
   if (res.ok) return;
-  let detail = '';
+  let error = null, text = '';
   try {
-    const body = await res.text();
-    detail = JSON.parse(body)?.error?.message || body.slice(0, 300);
-  } catch { /* ignore */ }
-  throw new Error(`${res.status} ${res.statusText}${detail ? ` — ${detail}` : ''}`);
+    text = await res.text();
+    error = JSON.parse(text)?.error || null;
+  } catch { /* not JSON */ }
+  throw providerError(res.status, res.statusText, error, text.slice(0, 300));
+}
+
+// An Error with the HTTP status attached (e.status), and the provider's own
+// explanation in the message. OpenRouter puts the host's real reason in metadata.raw.
+function providerError(status, statusText, error, fallbackText = '') {
+  const raw = typeof error?.metadata?.raw === 'string' ? error.metadata.raw.slice(0, 300) : '';
+  const detail = [error?.message || fallbackText, raw && raw !== error?.message ? `(${raw})` : ''].filter(Boolean).join(' ');
+  const e = new Error(`${status || ''} ${statusText || ''}`.trim() + (detail ? ` — ${detail}` : ''));
+  e.status = Number(status) || 0;
+  return e;
 }
 
 async function getJSON(url, headers) {

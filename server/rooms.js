@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { DocState } from './doc.js';
-import { parseModel, modelsFor, redact, isFreeModel } from './providers.js';
-import { houseEnabled, houseStatus, takeHouseMessage, giveBackHouseMessage, markHousePoolEmpty } from './house.js';
+import { parseModel, modelsFor, redact, isFreeModel, freeFallbacks } from './providers.js';
+import { houseEnabled, houseStatus, takeHouseMessage, giveBackHouseMessage, syncHousePool } from './house.js';
 import { keysFor } from './keys.js';
 import { getUser, findUser, publicUser, contactLists } from './accounts.js';
 
@@ -329,7 +329,7 @@ class Room {
     // No key of their own: the site's house key covers OpenRouter's free models only.
     if (!key && m.name === 'openrouter' && houseEnabled() && await isFreeModel(m.model)) {
       const taken = takeHouseMessage(user.accountId);
-      if (taken.key) return { provider: m.provider, model: m.model, key: taken.key, house: true };
+      if (taken.key) return { provider: m.provider, model: m.model, key: taken.key, house: true, fallbacks: await freeFallbacks(m.model) };
       const { perPerson } = houseStatus(user.accountId);
       socket.send({
         type: 'notice',
@@ -348,7 +348,9 @@ class Room {
       });
       return null;
     }
-    return { provider: m.provider, model: m.model, key };
+    // A free OpenRouter model gets free backups in case it's busy (on anyone's key).
+    const fallbacks = m.name === 'openrouter' && await isFreeModel(m.model) ? await freeFallbacks(m.model) : [];
+    return { provider: m.provider, model: m.model, key, fallbacks };
   }
 
   // Stream a model reply to `history` into the thread, for everyone in the room.
@@ -374,7 +376,12 @@ class Room {
       pending = '';
     };
     try {
-      for await (const piece of resolved.provider.stream(resolved.key, resolved.model, system, history, controller.signal)) {
+      const opts = { fallbacks: resolved.fallbacks || [] };
+      for await (const piece of resolved.provider.stream(resolved.key, resolved.model, system, history, controller.signal, opts)) {
+        // A backup model answered: label the reply with the model that actually wrote it.
+        if (piece.servedBy && `${this.model.split(':')[0]}:${piece.servedBy}` !== reply.model) {
+          reply.model = `${this.model.split(':')[0]}:${piece.servedBy}`;
+        }
         if (piece.text) {
           reply.content += piece.text;
           pending += piece.text;
@@ -393,9 +400,12 @@ class Room {
         console.warn('[send]', reply.error);
         if (resolved.house) {
           giveBackHouseMessage(user.accountId); // a failed message doesn't count
-          if (/^429/.test(reply.error)) {
-            markHousePoolEmpty();
-            reply.error = "This free model is busy, or the site's free messages are used up for today. Try another free model, try again later, or add your own free OpenRouter key.";
+          if (e.status === 429) {
+            // Busy right now, or today's free requests used up? Ask OpenRouter.
+            const left = await syncHousePool();
+            reply.error = left === 0
+              ? "This site's free messages are used up for today (OpenRouter's daily limit). They reset at midnight UTC. Add your own free OpenRouter key to keep going."
+              : `The free models are busy right now. Try again in a minute, or pick a different free model. (OpenRouter said: ${reply.error})`;
           }
         }
       }
@@ -407,7 +417,7 @@ class Room {
       this.usage.output += reply.usage.output;
       this.usage.requests++;
       this.generating = null;
-      this.broadcast({ type: 'done', id: reply.id, status: reply.status, error: reply.error, usage: reply.usage, content: reply.content });
+      this.broadcast({ type: 'done', id: reply.id, status: reply.status, error: reply.error, usage: reply.usage, content: reply.content, model: reply.model });
       this.broadcast({ type: 'usage', usage: this.usage });
       this.broadcast({ type: 'generating', generating: null });
       if (resolved.house) for (const [s, u] of this.clients) if (u.accountId === user.accountId) s.send({ type: 'house', house: houseStatus(user.accountId) });

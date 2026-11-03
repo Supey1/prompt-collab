@@ -149,7 +149,7 @@ async function handle(m) {
     }
     case 'done': {
       const msg = state.thread.find((x) => x.id === m.id);
-      if (msg) Object.assign(msg, { status: m.status, error: m.error, usage: m.usage, content: m.content });
+      if (msg) Object.assign(msg, { status: m.status, error: m.error, usage: m.usage, content: m.content, model: m.model || msg.model });
       if (msg) renderMessage(msg);
       break;
     }
