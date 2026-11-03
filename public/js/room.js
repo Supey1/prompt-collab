@@ -4,6 +4,7 @@ import { estimateTokens } from '../shared/ot.js';
 import { bindThemeToggle } from './theme.js';
 import { avatarContent } from './avatar.js';
 import { copyText } from './clipboard.js';
+import { resetClock, resetCountdown, resetPhrase } from './reset-time.js';
 
 const roomId = location.pathname.split('/')[2];
 const $ = (id) => document.getElementById(id);
@@ -165,9 +166,12 @@ async function handle(m) {
       break;
     case 'usage': state.usage = m.usage; updateTokens(); break;
     case 'generating': state.generating = m.generating; updateSendButton(); break;
-    case 'notice':
-      toast(m.message, m.action && { label: m.action.label, onClick: () => window.open(m.action.href, '_blank', 'noopener') });
+    case 'notice': {
+      // {reset}: when free messages come back, in this person's own time zone.
+      const message = m.resetsAt ? m.message.replace('{reset}', resetPhrase(m.resetsAt)) : m.message.replace('{reset}', 'at midnight UTC');
+      toast(message, m.action && { label: m.action.label, onClick: () => window.open(m.action.href, '_blank', 'noopener') });
       break;
+    }
   }
 }
 
@@ -235,8 +239,17 @@ function updateFreeLeft() {
   // A new room has no model until the first Send, so follow what the menu shows.
   const model = state.models.find((m) => m.id === (state.model || $('modelSelect').value));
   el.hidden = !(h?.enabled && h.usingHouse && model?.free);
-  if (!el.hidden) el.textContent = `${h.left} of ${h.perPerson} free left today`;
+  if (el.hidden) return;
+  // Short while there are messages left; the countdown matters once they run out.
+  el.textContent = h.left > 0 ? `${h.left} of ${h.perPerson} free left today` : `Free messages reset in ${resetCountdown(h.resetsAt)}`;
+  el.title = `Resets at ${resetClock(h.resetsAt)} your time (midnight UTC)`;
 }
+
+// Keep the countdown current, and pick up the fresh allowance once the reset time passes.
+setInterval(() => {
+  if (state.house?.resetsAt && Date.now() >= new Date(state.house.resetsAt)) loadModels();
+  else updateFreeLeft();
+}, 60000);
 
 // The menu lists the models your own keys unlock. If the room uses a model you
 // have no key for, it still shows (so you can see what's picked), marked as such.
