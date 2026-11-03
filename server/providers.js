@@ -224,6 +224,17 @@ export async function isFreeModel(model) {
   return (await freeModels()).includes(model);
 }
 
+// Some free models' hosts drop the system message (Gemma, for one, has no
+// system role of its own). For those, the system prompt is also repeated at the
+// top of the newest user message, so every model sees it. Only the request to
+// the model changes; the room's conversation is left as it was.
+export function withInstructions(history, system) {
+  if (!system || !history.length) return history;
+  const last = history[history.length - 1];
+  if (last.role !== 'user') return history;
+  return [...history.slice(0, -1), { ...last, content: `<instructions>\n${system}\n</instructions>\n\n${last.content}` }];
+}
+
 // Up to 2 other free models to fall back on, best first (OpenRouter takes at most 3 in total).
 export async function freeFallbacks(model) {
   return (await freeModels()).filter((m) => m !== model).slice(0, 2);

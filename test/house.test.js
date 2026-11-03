@@ -39,7 +39,7 @@ globalThis.fetch = async (url) => {
 try {
   const { createRoom } = await import('../server/rooms.js');
   const { saveKey } = await import('../server/keys.js');
-  const { modelsFor } = await import('../server/providers.js');
+  const { modelsFor, withInstructions } = await import('../server/providers.js');
   const { houseStatus, giveBackHouseMessage, syncHousePool, nextResetAt } = await import('../server/house.js');
 
   // Ask a room for the key it would use when `who` presses Send with `model`.
@@ -114,6 +114,19 @@ try {
   assert.deepEqual(sent.fallbacks, [], 'no other chat-capable free models in this list');
   const { freeModels } = await import('../server/providers.js');
   assert.ok(!(await freeModels()).some((m) => /content-safety/.test(m)), 'non-chat models are hidden');
+
+  // System prompts with free models: also repeated in the newest user message,
+  // because some free models' hosts drop the system message.
+  const history = [{ role: 'user', content: 'hi' }, { role: 'assistant', content: 'hello' }, { role: 'user', content: 'Explain Cloudflare.' }];
+  const toModel = withInstructions(history, 'Talk like a pirate.');
+  assert.equal(toModel.at(-1).content, '<instructions>\nTalk like a pirate.\n</instructions>\n\nExplain Cloudflare.');
+  assert.deepEqual(toModel.slice(0, -1), history.slice(0, -1), 'only the newest message changes');
+  assert.equal(history.at(-1).content, 'Explain Cloudflare.', "the room's own conversation is untouched");
+  assert.equal(withInstructions(history, ''), history, 'no system prompt: nothing added');
+  room.model = 'openrouter:meta/llama-free:free';
+  assert.equal((await room.modelFor(socket, { accountId: 'dana' })).free, true, 'free model: system prompt repeated');
+  room.model = 'openrouter:openai/gpt-5';
+  assert.equal((await room.modelFor(socket, { accountId: 'dana' })).free, false, 'paid model: sent the normal way only');
 
   // With no house key set, it's off and never used.
   const off = spawnSync(process.execPath, ['--input-type=module', '-e',

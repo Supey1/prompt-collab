@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { DocState } from './doc.js';
-import { parseModel, modelsFor, redact, isFreeModel, freeFallbacks } from './providers.js';
+import { parseModel, modelsFor, redact, isFreeModel, freeFallbacks, withInstructions } from './providers.js';
 import { houseEnabled, houseStatus, takeHouseMessage, giveBackHouseMessage, syncHousePool } from './house.js';
 import { keysFor } from './keys.js';
 import { getUser, findUser, publicUser, contactLists } from './accounts.js';
@@ -329,7 +329,7 @@ class Room {
     // No key of their own: the site's house key covers OpenRouter's free models only.
     if (!key && m.name === 'openrouter' && houseEnabled() && await isFreeModel(m.model)) {
       const taken = takeHouseMessage(user.accountId);
-      if (taken.key) return { provider: m.provider, model: m.model, key: taken.key, house: true, fallbacks: await freeFallbacks(m.model) };
+      if (taken.key) return { provider: m.provider, model: m.model, key: taken.key, house: true, free: true, fallbacks: await freeFallbacks(m.model) };
       const { perPerson, resetsAt } = houseStatus(user.accountId);
       socket.send({
         type: 'notice',
@@ -351,8 +351,9 @@ class Room {
       return null;
     }
     // A free OpenRouter model gets free backups in case it's busy (on anyone's key).
-    const fallbacks = m.name === 'openrouter' && await isFreeModel(m.model) ? await freeFallbacks(m.model) : [];
-    return { provider: m.provider, model: m.model, key, fallbacks };
+    const free = m.name === 'openrouter' && await isFreeModel(m.model);
+    const fallbacks = free ? await freeFallbacks(m.model) : [];
+    return { provider: m.provider, model: m.model, key, fallbacks, free };
   }
 
   // Stream a model reply to `history` into the thread, for everyone in the room.
@@ -379,7 +380,9 @@ class Room {
     };
     try {
       const opts = { fallbacks: resolved.fallbacks || [] };
-      for await (const piece of resolved.provider.stream(resolved.key, resolved.model, system, history, controller.signal, opts)) {
+      // Free models: also put the system prompt in the message itself (see withInstructions).
+      const sent = resolved.free ? withInstructions(history, system) : history;
+      for await (const piece of resolved.provider.stream(resolved.key, resolved.model, system, sent, controller.signal, opts)) {
         // A backup model answered: label the reply with the model that actually wrote it.
         if (piece.servedBy && `${this.model.split(':')[0]}:${piece.servedBy}` !== reply.model) {
           reply.model = `${this.model.split(':')[0]}:${piece.servedBy}`;
