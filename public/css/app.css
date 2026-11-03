@@ -191,6 +191,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .body h1 { font-size: 22px; } .body h2 { font-size: 19px; } .body h3 { font-size: 17px; }
 .body table { border-collapse: collapse; font-size: 14px; }
 .body th, .body td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; }
+.math-display { overflow-x: auto; overflow-y: hidden; padding: 4px 0; margin: 10px 0; }
+.math-display .katex-display { margin: 0; }
+.body .katex { font-size: 1.08em; }
+.math-raw { font: .9em var(--mono); color: var(--ink-2); }
+.math-raw.display { display: block; margin: 10px 0; white-space: pre-wrap; }
 .copy-code { position: absolute; top: 6px; right: 6px; font: 12px var(--sans); padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); cursor: pointer; color: var(--ink-2); }
 .cursor-blink { display: inline-block; width: 8px; height: 1.1em; vertical-align: -.2em; background: var(--ink); animation: blink 1s steps(2) infinite; margin-left: 2px; }
 @keyframes blink { 50% { opacity: 0; } }
