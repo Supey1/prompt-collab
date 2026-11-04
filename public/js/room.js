@@ -55,13 +55,6 @@ for (const ed of [promptEd, systemEd]) {
   });
 }
 
-function askCode() {
-  return new Promise((resolve) => {
-    $('codeForm').onsubmit = () => { const c = $('codeInput').value.trim(); store.set('pc-code', c); resolve(c); };
-    $('codeDialog').showModal();
-  });
-}
-
 // ---------- connection ----------
 const toSignIn = () => location.replace(`/signin?next=${encodeURIComponent(location.pathname)}`);
 
@@ -77,7 +70,7 @@ function connect() {
   const ws = new WebSocket(`${proto}//${location.host}/ws?room=${encodeURIComponent(roomId)}`);
   state.ws = ws;
   // Who you are comes from your sign-in cookie, which the browser sends automatically.
-  ws.onopen = () => ws.send(JSON.stringify({ type: 'hello', code: store.get('pc-code') || '' }));
+  ws.onopen = () => ws.send(JSON.stringify({ type: 'hello' }));
   ws.onmessage = (e) => handle(JSON.parse(e.data));
   ws.onclose = () => {
     if (state.ws !== ws) return;
@@ -99,10 +92,6 @@ async function handle(m) {
       return showGate(m.reason, m.hostName, m.message);
     case 'share': state.share = m; renderShare(); break;
     case 'house': state.house = { ...state.house, ...m.house }; updateFreeLeft(); break;
-    case 'auth':
-      state.ws.onclose = null; state.ws.close();
-      await askCode();
-      return connect();
     case 'init':
       state.connected = true; state.retry = 0; setStatus('online');
       state.me = m.you;

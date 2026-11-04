@@ -88,7 +88,7 @@ Settings (`.env`):
 | `HOUSE_DAILY_TOTAL` | `50` | Free messages per day in total (OpenRouter's free accounts allow 50) |
 | `KEY_ENCRYPTION_SECRET` | auto | Encrypts saved keys. If empty, a random one is created in `data/secret.key`. **Set it explicitly when you deploy**, keep it secret, and don't change it, or saved keys must be re-entered. |
 | `PORT` | `3000` | Port to listen on |
-| `ACCESS_CODE` | none | If set, people must also enter this code to join a room |
+| `ACCESS_CODE` | none | Makes the whole site private: visitors see a code page and must enter this code (once per browser) before they can see anything or create an account. 10 wrong tries from one address locks it out for 15 minutes. Changing the code asks everyone again. |
 | `ALLOW_INSECURE_KEYS` | none | Set to `1` to allow adding keys over plain `http://` network addresses. Only on a home network you trust. |
 | `DATA_DIR` | `./data` | Where everything is saved |
 | `DISABLE_DEMO` | none | Set to `1` to hide the free demo model |
@@ -97,7 +97,7 @@ Settings (`.env`):
 - Passwords hashed with `scrypt`. Sessions are HttpOnly, SameSite cookies, and only a hash is stored on the server.
 - Requests that change anything must come from the app's own pages (CSRF protection), and live connections check the same.
 - A strict Content Security Policy (only the app's own scripts run), no framing (clickjacking), `nosniff`, no referrer, and `no-store` on private API responses.
-- Rate limits on sign-in attempts, new accounts, and key checks.
+- Rate limits on sign-in attempts, new accounts, key checks, and access code guesses.
 - Fonts ship with the app in `public/fonts/` (Inter, Source Serif 4, JetBrains Mono; SIL Open Font License), so no third-party font service sees your visitors.
 
 ## How it works
