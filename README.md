@@ -128,6 +128,17 @@ browser ── WebSocket ──► server/index.js
   - `data/house-usage.json`: today's free message counts, if the house key is on
   - `data/secret.key`: the encryption key for them, unless `KEY_ENCRYPTION_SECRET` is set
 
+## Share it over the internet for free (Cloudflare Tunnel)
+
+A Cloudflare quick tunnel gives the app running on your computer a temporary `https://….trycloudflare.com` address that anyone can open. No account or domain needed.
+
+1. Install `cloudflared` (Windows: `winget install --id Cloudflare.cloudflared`; other systems: see Cloudflare's downloads page).
+2. Start the app: `npm start`.
+3. In a second terminal: `cloudflared tunnel --url http://localhost:3000`, then share the `https://….trycloudflare.com` address it prints.
+4. Optional: only let specific people in, with a one-time PIN emailed by Cloudflare: add `--allowed-mail you@example.com --allowed-mail friend@example.com`.
+
+The address works while both commands run and changes each time you start the tunnel. Set `ACCESS_CODE` (or use `--allowed-mail`) so strangers who find the address can't get in. Behind the tunnel, rate limits use the visitor address Cloudflare reports (`CF-Connecting-IP`), trusted only on requests from this computer.
+
 ## Deploying
 
 Any host that runs a long-lived Node process with WebSockets works, such as Render, Railway, Fly.io, or a small VPS. Set `KEY_ENCRYPTION_SECRET` (and optionally `ACCESS_CODE`) as environment variables there, serve it over `https://`, and give it a persistent disk for `data/`. Serverless platforms like Vercel or Netlify functions don't keep WebSocket connections open, so they won't work for this app as written.

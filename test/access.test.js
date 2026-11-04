@@ -65,6 +65,16 @@ try {
   assert.equal(r.status, 429, 'the 11th try is refused, even if right');
   assert.match((await r.json()).error, /Too many wrong tries/);
 
+  // Behind a Cloudflare Tunnel every request comes from this computer; Cloudflare's
+  // CF-Connecting-IP says who the visitor really is, so one visitor's wrong guesses
+  // don't lock out everyone else.
+  const visitor = (ip) => ({ 'cf-connecting-ip': ip });
+  r = await post('/api/access', { code: 'a-brand-new-code-77' }, null, visitor('203.0.113.5'));
+  assert.equal(r.status, 200, 'a different visitor through the tunnel is not locked out');
+  for (let i = 0; i < 10; i++) await post('/api/access', { code: `nope-${i}` }, null, visitor('203.0.113.6'));
+  assert.equal((await post('/api/access', { code: 'a-brand-new-code-77' }, null, visitor('203.0.113.6'))).status, 429, 'that visitor is locked out');
+  assert.equal((await post('/api/access', { code: 'a-brand-new-code-77' }, null, visitor('203.0.113.7'))).status, 200, 'others still get in');
+
   // No code set: the site is open, like before.
   await start('');
   assert.equal((await fetch(base + '/')).status, 200);
@@ -89,6 +99,6 @@ async function start(code) {
   throw new Error('server did not start');
 }
 
-function post(p, body, cookie) {
-  return fetch(base + p, { method: 'POST', headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}) }, body: JSON.stringify(body) });
+function post(p, body, cookie, extra = {}) {
+  return fetch(base + p, { method: 'POST', headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}), ...extra }, body: JSON.stringify(body) });
 }

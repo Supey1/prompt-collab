@@ -56,7 +56,7 @@ const server = http.createServer(async (req, res) => {
       return sendFile(res, path.join(ROOT, `${p.slice(1)}.html`));
     }
     if (p === '/api/signup' && req.method === 'POST') {
-      if (!allow(signups, req.socket.remoteAddress, 10, 60 * 60e3)) {
+      if (!allow(signups, clientIp(req), 10, 60 * 60e3)) {
         return json(res, { error: 'Too many new accounts from this network. Try again in an hour.' }, 429);
       }
       const body = await readBody(req);
@@ -67,7 +67,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, { user: publicUser(result.user), recoveryCodes: await newRecoveryCodes(result.user) });
     }
     if (p === '/api/reset' && req.method === 'POST') {
-      const ip = req.socket.remoteAddress;
+      const ip = clientIp(req);
       if (tooManyFailures(ip)) return json(res, { error: 'Too many wrong attempts. Try again in 15 minutes.' }, 429);
       const result = await resetWithCode(await readBody(req, 4096));
       if (result.error) { if (result.field === 'code') recordFailure(ip); return json(res, result, 400); }
@@ -75,7 +75,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, { user: publicUser(result.user), recoveryCodesLeft: recoveryCodesLeft(result.user) });
     }
     if (p === '/api/signin' && req.method === 'POST') {
-      const ip = req.socket.remoteAddress;
+      const ip = clientIp(req);
       if (tooManyFailures(ip)) return json(res, { error: 'Too many wrong attempts. Try again in 15 minutes.' }, 429);
       const body = await readBody(req);
       const user = await checkPassword(body.username, body.password);
@@ -395,6 +395,19 @@ function setSecurityHeaders(req, res, p) {
   if (p.startsWith('/api/') && !p.startsWith('/api/avatar/')) res.setHeader('cache-control', 'no-store');
 }
 
+const LOOPBACK = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
+
+// The visitor's address, for rate limits. Behind a Cloudflare Tunnel every request
+// arrives from this computer (where cloudflared runs), so use the address Cloudflare
+// reports instead. That header is only trusted from this computer: anyone else
+// connecting directly could fake it.
+function clientIp(req) {
+  const direct = req.socket.remoteAddress;
+  const cf = req.headers['cf-connecting-ip'];
+  if (LOOPBACK.includes(direct) && typeof cf === 'string' && /^[0-9a-f.:]{2,45}$/i.test(cf.trim())) return cf.trim();
+  return direct;
+}
+
 const isHttps = (req) => req.headers['x-forwarded-proto'] === 'https' || !!req.socket.encrypted;
 
 // True if the request came from one of this site's own pages (or has no Origin,
@@ -409,7 +422,7 @@ function sameOrigin(req) {
 // (localhost never touches the network). ALLOW_INSECURE_KEYS=1 opts out on a trusted home network.
 function secureEnoughForKeys(req) {
   if (isHttps(req) || process.env.ALLOW_INSECURE_KEYS === '1') return true;
-  return ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
+  return LOOPBACK.includes(req.socket.remoteAddress) && !req.headers['cf-connecting-ip']; // not tunnel traffic
 }
 
 // Everything the API keys page shows. Never includes a full key.
@@ -463,7 +476,7 @@ const codeFailures = new Map(); // ip -> { count, since }
 
 async function enterAccessCode(req, res) {
   if (!ACCESS_CODE) return json(res, { ok: true }); // no code needed
-  const ip = req.socket.remoteAddress;
+  const ip = clientIp(req);
   const f = codeFailures.get(ip);
   if (f && Date.now() - f.since > 15 * 60e3) codeFailures.delete(ip);
   if ((codeFailures.get(ip)?.count || 0) >= 10) {
