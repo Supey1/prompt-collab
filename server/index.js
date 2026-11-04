@@ -2,6 +2,7 @@ import './env.js'; // must stay first: loads .env before the files below read th
 import http from 'node:http';
 import fs from 'node:fs';
 import os from 'node:os';
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { attachWebSocket } from './ws.js';
@@ -35,6 +36,16 @@ const server = http.createServer(async (req, res) => {
   // Cross-site request forgery: only this site's own pages may change things.
   if (req.method !== 'GET' && req.method !== 'HEAD' && !sameOrigin(req)) {
     return json(res, { error: 'Request blocked: it came from another website.' }, 403);
+  }
+  try {
+    // ---- access code (optional): the whole site is private until it's entered ----
+    if (p === '/api/access' && req.method === 'POST') return enterAccessCode(req, res);
+    if (ACCESS_CODE && !hasAccess(req) && !openWithoutCode(p)) {
+      if (p.startsWith('/api/')) return json(res, { error: 'Access code required.' }, 401);
+      return sendFile(res, path.join(ROOT, 'access.html'), 401); // the code page, at the same address
+    }
+  } catch (e) {
+    return json(res, { error: e.message === 'Request too large' ? 'That upload is too large.' : 'Something went wrong on the server.' }, 400);
   }
   const me = userFromCookie(req.headers.cookie);
   try {
@@ -220,8 +231,10 @@ const server = http.createServer(async (req, res) => {
 attachWebSocket(server, '/ws', (socket, req, url) => {
   const roomId = url.searchParams.get('room') || '';
   if (!validRoomId(roomId)) return socket.destroy();
-  // Only pages from this site may connect, and only for a signed-in person.
+  // Only pages from this site may connect, only with the access code (if one is set),
+  // and only for a signed-in person.
   if (!sameOrigin(req)) return socket.destroy();
+  if (ACCESS_CODE && !hasAccess(req)) return socket.destroy();
   const account = userFromCookie(req.headers.cookie);
   if (!account) {
     socket.send({ type: 'signin' });
@@ -231,10 +244,6 @@ attachWebSocket(server, '/ws', (socket, req, url) => {
   socket.on('message', (msg) => {
     if (!room) {
       if (msg.type !== 'hello') return;
-      if (ACCESS_CODE && msg.code !== ACCESS_CODE) {
-        socket.send({ type: 'auth', ok: false });
-        return;
-      }
       const target = loadRoom(roomId);
       const verdict = target ? target.canEnter(account.id) : 'missing';
       if (verdict !== 'ok') {
@@ -425,6 +434,52 @@ function allow(map, id, max, windowMs) {
   const entry = map.get(id);
   if (!entry || now - entry.since > windowMs) { map.set(id, { count: 1, since: now }); return true; }
   return ++entry.count <= max;
+}
+
+// ---- access code ----
+
+// What the access cookie holds: a fingerprint of the code, never the code itself.
+// Changing ACCESS_CODE changes it, so everyone is asked for the new code.
+const ACCESS_COOKIE = 'pc_access';
+const accessToken = () => crypto.createHmac('sha256', 'promptcollab-access-v1').update(ACCESS_CODE).digest('base64url');
+const sameSecret = (a, b) => {
+  const [x, y] = [a, b].map((s) => crypto.createHash('sha256').update(String(s)).digest());
+  return crypto.timingSafeEqual(x, y); // compares without leaking hints through timing
+};
+
+function hasAccess(req) {
+  const got = readCookie(req.headers.cookie, ACCESS_COOKIE);
+  return !!got && sameSecret(got, accessToken());
+}
+
+// What the code page itself needs (and the privacy page) stays reachable.
+function openWithoutCode(p) {
+  return ['/healthz', '/api/config', '/privacy', '/favicon.svg', '/og.png', '/apple-touch-icon.png'].includes(p) ||
+    ['/css/', '/js/', '/fonts/', '/vendor/', '/shared/'].some((dir) => p.startsWith(dir));
+}
+
+// 10 wrong codes from one address locks it out for 15 minutes.
+const codeFailures = new Map(); // ip -> { count, since }
+
+async function enterAccessCode(req, res) {
+  if (!ACCESS_CODE) return json(res, { ok: true }); // no code needed
+  const ip = req.socket.remoteAddress;
+  const f = codeFailures.get(ip);
+  if (f && Date.now() - f.since > 15 * 60e3) codeFailures.delete(ip);
+  if ((codeFailures.get(ip)?.count || 0) >= 10) {
+    return json(res, { error: 'Too many wrong tries. Wait 15 minutes, then try again.' }, 429);
+  }
+  const { code } = await readBody(req, 4096);
+  if (!sameSecret(String(code || '').trim(), ACCESS_CODE)) {
+    const entry = codeFailures.get(ip) || { count: 0, since: Date.now() };
+    entry.count++;
+    codeFailures.set(ip, entry);
+    return json(res, { error: "That code isn't right. Check it with whoever gave it to you." }, 400);
+  }
+  codeFailures.delete(ip);
+  const secure = isHttps(req) ? '; Secure' : '';
+  res.setHeader('set-cookie', `${ACCESS_COOKIE}=${accessToken()}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${365 * 86400}${secure}`);
+  return json(res, { ok: true });
 }
 
 // Only follow `next` to a page on this site (so a link can't bounce people elsewhere).
