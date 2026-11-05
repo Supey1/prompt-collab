@@ -8,6 +8,13 @@ export async function initSite() {
   bindThemeToggle(document.getElementById('themeBtn'));
   bindMenu();
   revealOnScroll();
+  // Remember the last page browsed, so the access code page can offer a way back.
+  try { sessionStorage.setItem('pc-last-page', location.pathname); } catch { /* private mode */ }
+  // The header gets a line under it once the page has scrolled.
+  const header = document.querySelector('.site-header');
+  const onScroll = () => header?.classList.toggle('scrolled', scrollY > 8);
+  addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
   const config = await fetchJson('/api/config');
   const locked = !!config && !config.unlocked; // nobody can be signed in before entering the code
   const user = locked ? null : (await fetchJson('/api/me'))?.user || null;

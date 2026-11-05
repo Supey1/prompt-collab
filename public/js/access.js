@@ -5,6 +5,17 @@ import { bindThemeToggle } from './theme.js';
 const $ = (id) => document.getElementById(id);
 bindThemeToggle($('themeBtn'));
 
+// "Back" returns to the page they were browsing on this site (home, About,
+// FAQ or Privacy). Arriving from anywhere else, like an invite link in a
+// chat, it goes to the home page.
+const PAGES = { '/': 'the home page', '/about': 'About', '/faq': 'the FAQ', '/privacy': 'Privacy' };
+let last = null;
+try { last = sessionStorage.getItem('pc-last-page'); } catch { /* private mode */ }
+if (last && Object.hasOwn(PAGES, last) && last !== location.pathname) {
+  $('backLink').href = last;
+  $('backText').textContent = `Back to ${PAGES[last]}`;
+}
+
 $('showCode').addEventListener('click', (e) => {
   const show = $('code').type === 'password';
   $('code').type = show ? 'text' : 'password';
