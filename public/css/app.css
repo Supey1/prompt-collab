@@ -481,7 +481,6 @@ kbd { font: 600 12px var(--mono); padding: 3px 7px; border-radius: 6px; border: 
 /* ---------- public site: header, sections, about, FAQ, footer ---------- */
 html { scroll-behavior: smooth; }
 body.site { height: auto; min-height: 100%; display: flex; flex-direction: column; }
-.landing { overflow-x: clip; } /* the hero's glow may spill past the edges */
 body.site > main { flex: 1; }
 .skip-link { position: absolute; left: 12px; top: -48px; z-index: 100; background: var(--btn); color: var(--btn-text); padding: 8px 14px; border-radius: var(--r-sm); text-decoration: none; font-weight: 600; }
 .skip-link:focus { top: 12px; }
@@ -600,15 +599,20 @@ section[id], .page-head { scroll-margin-top: 80px; }
 
 /* hero: glows behind, words rise in, and it drifts away as you scroll */
 .hero { position: relative; }
-.hero-copy, .hero .demo { position: relative; z-index: 1; }
-.hero-glow { position: absolute; inset: -80px -160px 0; z-index: 0; pointer-events: none; overflow: hidden; }
-.hero-glow span { position: absolute; width: 460px; height: 460px; border-radius: 50%; filter: blur(90px); opacity: .22; }
-.hero-glow span:first-child { background: #3d6bff; top: 0; right: 4%; }
-.hero-glow span:last-child { background: #e8457c; top: 140px; right: 26%; width: 340px; height: 340px; opacity: .16; }
-.motion .hero-glow span:first-child { animation: drift 14s ease-in-out infinite alternate; }
-.motion .hero-glow span:last-child { animation: drift 18s ease-in-out infinite alternate-reverse; }
+/* Glow behind the top of the page: full width (only the screen edges clip it),
+   behind the header too, and tall enough that the blur fades out completely. */
+.page-glow { position: absolute; top: 0; left: 0; right: 0; height: 1000px; overflow: hidden; pointer-events: none; z-index: 0; }
+.page-glow span { position: absolute; border-radius: 50%; filter: blur(100px); }
+.page-glow span:first-child { width: 520px; height: 520px; left: calc(50% + 40px); top: 60px; background: #3d6bff; opacity: .2; }
+.page-glow span:last-child { width: 380px; height: 380px; left: calc(50% - 160px); top: 240px; background: #e8457c; opacity: .14; }
+.motion .page-glow span:first-child { animation: drift 14s ease-in-out infinite alternate; }
+.motion .page-glow span:last-child { animation: drift 18s ease-in-out infinite alternate-reverse; }
 @keyframes drift { to { translate: -60px 40px; } }
-.motion .hero-glow { transform: translateY(calc(var(--hero-p, 0) * 140px)); }
+.motion .page-glow { transform: translateY(calc(var(--hero-p, 0) * 140px)); }
+.landing { position: relative; z-index: 1; }
+/* At the very top the header is see-through so the glow runs behind it; it gets
+   its background (and line) once the page scrolls. */
+.site-header:not(.scrolled) { background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
 
 .motion .hero h1 .w { display: inline-block; opacity: 0; transform: translateY(.45em); filter: blur(6px); animation: word-in .8s cubic-bezier(.2, .7, .2, 1) forwards; animation-delay: calc(80ms + var(--i) * 70ms); }
 @keyframes word-in { to { opacity: 1; transform: none; filter: none; } }
@@ -716,9 +720,8 @@ section[id], .page-head { scroll-margin-top: 80px; }
 .will-reveal .cta.reveal.in { transform: none; }
 
 @media (max-width: 860px) {
-  .hero-glow { inset: -40px -40px 0; }
-  .hero-glow span:first-child { width: 300px; height: 300px; right: -60px; }
-  .hero-glow span:last-child { width: 240px; height: 240px; right: 40%; top: 260px; }
+  .page-glow span:first-child { width: 340px; height: 340px; left: auto; right: -80px; top: 40px; }
+  .page-glow span:last-child { width: 260px; height: 260px; left: -40px; top: 320px; }
   /* phones: the preview pins near the top and the steps scroll underneath */
   .story { grid-template-columns: 1fr; gap: 0; }
   .story-stage { order: -1; top: 64px; z-index: 2; padding: 8px 0 16px; background: linear-gradient(var(--paper) 85%, transparent); }
