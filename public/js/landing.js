@@ -1,5 +1,8 @@
 import { initSite, esc } from './site.js';
 import { estimateTokens } from '../shared/ot.js';
+import { initHomeMotion } from './home-motion.js';
+
+initHomeMotion();
 
 // After deleting an account, say so instead of silently showing a signed-out page.
 if (new URLSearchParams(location.search).has('deleted')) {
