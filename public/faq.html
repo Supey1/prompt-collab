@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FAQ · PromptCollab</title>
+  <!--meta-->
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body class="site">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="logo" href="/">
+        <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="5" width="26" height="22" rx="6" fill="currentColor"/><path d="M10 13l4 3-4 3" stroke="var(--paper)" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><rect x="17" y="10" width="2.4" height="12" rx="1.2" fill="#2f5be8"/><rect x="21" y="10" width="2.4" height="12" rx="1.2" fill="#c92a62"/></svg>
+        PromptCollab
+      </a>
+      <nav class="site-nav" id="siteNav" aria-label="Main">
+        <a href="/#how">How it works</a>
+        <a href="/#features">Features</a>
+        <a href="/faq" aria-current="page">FAQ</a>
+        <a href="/about">About</a>
+        <div class="nav-account" id="navAccount"></div>
+      </nav>
+      <div class="header-right">
+        <div class="account" id="account"></div>
+        <button class="icon-btn" id="themeBtn" type="button" aria-label="Toggle dark mode">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        </button>
+        <button class="icon-btn menu-btn" id="menuBtn" type="button" aria-label="Menu" aria-controls="siteNav" aria-expanded="false">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="page">
+      <header class="page-head">
+        <p class="eyebrow">FAQ</p>
+        <h1>Questions and answers</h1>
+        <p class="lead">Everything people usually ask about PromptCollab. Can't find yours? <a href="mailto:supratibh.mondal2027@gmail.com">Email me</a>.</p>
+      </header>
+      <section class="faq-group" aria-labelledby="gBasics">
+        <h2 id="gBasics">The basics</h2>
+        <div class="faq-list">
+        <details>
+          <summary>What is PromptCollab?</summary>
+          <div class="answer"><p>A shared editor for AI prompts. Your team writes one prompt together in real time, like a Google Doc, then sends it to a model. The answer streams in for everyone in the room at once, and the conversation stays in the room.</p></div>
+        </details>
+        <details>
+          <summary>Do I need an account?</summary>
+          <div class="answer"><p>Yes, to start or join a room, so people in a room can see who wrote what. Signing up only asks for a username, a display name and a password. No email needed.</p><p>While PromptCollab is in private preview, you also need an access code from the owner. Everything on the home, About and FAQ pages is open to anyone.</p></div>
+        </details>
+        <details>
+          <summary>Is it free?</summary>
+          <div class="answer"><p>PromptCollab itself is free. Paid AI models (like GPT, Claude or Gemini) are billed by the company that runs them, to the API key of whoever presses Send.</p><p>You can also use OpenRouter's free models, which cost nothing, and a built-in demo model that doesn't send anything anywhere.</p></div>
+        </details>
+        <details>
+          <summary>Which AI models can I use?</summary>
+          <div class="answer"><p>Models from OpenAI, Anthropic and Google with your own key for each, and hundreds more through OpenRouter, including free ones. The model menu only shows models you can actually use.</p></div>
+        </details>
+        </div>
+      </section>
+      <section class="faq-group" aria-labelledby="gKeys">
+        <h2 id="gKeys">Keys and cost</h2>
+        <div class="faq-list">
+        <details>
+          <summary>Who pays when someone presses Send?</summary>
+          <div class="answer"><p>The person who presses Send. Their own API key is used for that message, and nobody else's. If you don't have a key for a model, you can't send to it, but you can still edit the prompt and read every answer.</p></div>
+        </details>
+        <details>
+          <summary>Do my teammates need their own keys?</summary>
+          <div class="answer"><p>Only to send. Anyone in the room can write the prompt and read the replies. If one person has a key and the others don't, that person presses Send when the team is ready. Each key only ever pays for its owner's messages.</p></div>
+        </details>
+        <details>
+          <summary>How do the free messages work?</summary>
+          <div class="answer"><p>When the site owner turns them on, everyone gets 5 free messages a day on OpenRouter's free models, without a key. They reset every day at midnight UTC (the site shows when, in your time zone). On a busy day the free models can be slow or full; adding your own free OpenRouter key gets around that.</p></div>
+        </details>
+        <details>
+          <summary>Is my API key safe?</summary>
+          <div class="answer"><p>Keys are encrypted (AES-256-GCM) before they're saved, never shown again after you add them (only the last 4 characters), and never sent to other people's browsers. The site only accepts keys over a secure connection. You can remove a key at any time.</p><p>Tip: set a monthly spending limit on your key in the provider's dashboard, so a mistake can never cost much.</p></div>
+        </details>
+        </div>
+      </section>
+      <section class="faq-group" aria-labelledby="gRooms">
+        <h2 id="gRooms">Rooms</h2>
+        <div class="faq-list">
+        <details>
+          <summary>How do I invite people to a room?</summary>
+          <div class="answer"><p>Click <b>Share</b> in the room. You can add teammates by username, or open the room to anyone who has the link. New rooms start restricted: only people you add can get in, and others can ask to join.</p></div>
+        </details>
+        <details>
+          <summary>Can everyone in a room edit?</summary>
+          <div class="answer"><p>Yes. Everyone who can get into a room can edit the prompt and send it. The host (whoever started the room) decides who gets in, and can remove people.</p></div>
+        </details>
+        <details>
+          <summary>Does it handle code and math?</summary>
+          <div class="answer"><p>Yes. Replies show code blocks with a Copy button, tables, and equations written in LaTeX. You can also export a whole conversation as a Markdown file.</p></div>
+        </details>
+        </div>
+      </section>
+      <section class="faq-group" aria-labelledby="gPrivacy">
+        <h2 id="gPrivacy">Privacy</h2>
+        <div class="faq-list">
+        <details>
+          <summary>What gets stored about me?</summary>
+          <div class="answer"><p>Only what the app needs: your account, the rooms you're in and their conversations, and your encrypted keys. No ads, analytics or trackers. The <a href="/privacy">privacy page</a> lists everything.</p></div>
+        </details>
+        <details>
+          <summary>Can I delete my account?</summary>
+          <div class="answer"><p>Yes. On your account page you can download all your data or delete your account. Deleting removes your account, keys, picture and contacts.</p></div>
+        </details>
+        <details>
+          <summary>Are free models private?</summary>
+          <div class="answer"><p>Not always. Some free models are run by providers that may use prompts to train their AI. Don't put anything private or confidential into a free model.</p></div>
+        </details>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="site-footer-big">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <strong>PromptCollab</strong>
+        <p>Write the prompt together. Send it to any model.</p>
+      </div>
+      <nav aria-label="Product">
+        <h2>Product</h2>
+        <a href="/#how">How it works</a>
+        <a href="/#features">Features</a>
+        <a href="/faq">FAQ</a>
+      </nav>
+      <nav aria-label="About">
+        <h2>About</h2>
+        <a href="/about">About PromptCollab</a>
+        <a href="/privacy">Privacy</a>
+      </nav>
+      <nav aria-label="Contact">
+        <h2>Contact</h2>
+        <a href="mailto:supratibh.mondal2027@gmail.com">Email</a>
+        <a href="https://github.com/Supey1" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href="https://www.linkedin.com/in/supratibh-mondal-baa382392/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+      </nav>
+    </div>
+    <p class="footer-fine">Made by Supratibh Mondal · No ads, no trackers</p>
+  </footer>
+
+  <script type="module" src="/js/info.js"></script>
+</body>
+</html>

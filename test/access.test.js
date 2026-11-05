@@ -1,4 +1,5 @@
-// With ACCESS_CODE set, the whole site is private until the code is entered.
+// With ACCESS_CODE set, the app is private until the code is entered. Pages
+// about PromptCollab (home, about, FAQ, privacy) stay public.
 // Starts real servers with temporary data folders.
 // Run: node test/access.test.js
 import assert from 'node:assert/strict';
@@ -20,7 +21,7 @@ try {
   await start('purple-tiger-river-42');
 
   // Locked: pages show the code page (at the same address), APIs refuse.
-  for (const p of ['/', '/signup', '/signin', '/account', '/keys', '/r/abcdefgh', '/new', '/no-such-page']) {
+  for (const p of ['/signup', '/signin', '/account', '/keys', '/r/abcdefgh', '/new', '/no-such-page']) {
     const r = await fetch(base + p, { redirect: 'manual' });
     assert.equal(r.status, 401, `${p} is locked`);
     assert.match(await r.text(), /This site is private/, `${p} shows the code page`);
@@ -29,10 +30,25 @@ try {
   assert.equal(r.status, 401, "can't create an account without the code");
   assert.equal((await r.json()).error, 'Access code required.');
 
-  // What the code page needs, and the privacy page, stay reachable.
-  for (const p of ['/css/app.css', '/js/access.js', '/js/theme.js', '/favicon.svg', '/privacy', '/healthz']) {
+  for (const p of ['/api/me', '/api/my-rooms', '/api/keys', '/api/rooms/abcdefgh']) {
+    assert.equal((await fetch(base + p)).status, 401, `${p} is locked`);
+  }
+
+  // What the code page needs, and the pages about PromptCollab, stay reachable.
+  for (const p of ['/css/app.css', '/js/access.js', '/js/theme.js', '/js/site.js', '/favicon.svg', '/healthz']) {
     assert.equal((await fetch(base + p)).status, 200, `${p} stays open`);
   }
+  for (const [p, text] of [['/', /Write the prompt together/], ['/about', /Why PromptCollab exists/], ['/faq', /Questions and answers/], ['/privacy', /What's stored/]]) {
+    r = await fetch(base + p);
+    assert.equal(r.status, 200, `${p} is public`);
+    const html = await r.text();
+    assert.match(html, text, `${p} shows its own content`);
+    assert.doesNotMatch(html, /This site is private/);
+    assert.doesNotMatch(html, /noindex/, `${p} can be found by search engines`);
+  }
+  let config = await (await fetch(base + '/api/config')).json();
+  assert.equal(config.accessCodeRequired, true);
+  assert.equal(config.unlocked, false, 'the home page knows to show the private-preview note');
 
   // Wrong code: a clear message, no cookie.
   r = await post('/api/access', { code: 'wrong-guess' });
@@ -46,18 +62,19 @@ try {
   const cookie = r.headers.get('set-cookie').split(';')[0];
   assert.match(r.headers.get('set-cookie'), /HttpOnly/);
   assert.ok(!cookie.includes('purple-tiger'), 'the cookie never contains the code itself');
-  r = await fetch(base + '/', { headers: { cookie } });
-  assert.equal(r.status, 200);
-  assert.doesNotMatch(await r.text(), /This site is private/);
+  r = await fetch(base + '/new', { headers: { cookie }, redirect: 'manual' });
+  assert.equal(r.status, 302, 'past the code, signed-out people are sent to sign in');
+  config = await (await fetch(base + '/api/config', { headers: { cookie } })).json();
+  assert.equal(config.unlocked, true);
   r = await post('/api/signup', { username: 'friend', displayName: 'F', password: 'password123', color: '#2f5be8' }, cookie);
   assert.equal(r.status, 200, 'with the code, sign-up works');
 
   // A made-up cookie doesn't work.
-  assert.equal((await fetch(base + '/', { headers: { cookie: 'pc_access=made-up' } })).status, 401);
+  assert.equal((await fetch(base + '/signup', { headers: { cookie: 'pc_access=made-up' } })).status, 401);
 
   // Changing the code asks everyone again.
   await start('a-brand-new-code-77');
-  assert.equal((await fetch(base + '/', { headers: { cookie } })).status, 401, 'old code no longer works');
+  assert.equal((await fetch(base + '/signup', { headers: { cookie } })).status, 401, 'old code no longer works');
 
   // Too many wrong guesses: locked out, even for the right code.
   for (let i = 0; i < 10; i++) assert.equal((await post('/api/access', { code: `guess-${i}` })).status, 400);
@@ -77,8 +94,22 @@ try {
 
   // No code set: the site is open, like before.
   await start('');
-  assert.equal((await fetch(base + '/')).status, 200);
-  assert.doesNotMatch(await (await fetch(base + '/')).text(), /This site is private/);
+  assert.equal((await fetch(base + '/signup')).status, 200);
+  assert.doesNotMatch(await (await fetch(base + '/signup')).text(), /This site is private/);
+  assert.equal((await (await fetch(base + '/api/config')).json()).unlocked, true);
+
+  // Every link on the public pages goes somewhere real (a page, or the sign-in redirect).
+  for (const page of ['/', '/about', '/faq', '/privacy']) {
+    const html = await (await fetch(base + page)).text();
+    const links = new Set([...html.matchAll(/(?:href|src)="(\/[^"#]*)/g)].map((m) => m[1] || '/'));
+    for (const link of links) {
+      const res = await fetch(base + link, { redirect: 'manual' });
+      assert.ok([200, 302].includes(res.status), `${link} (linked from ${page}) works: got ${res.status}`);
+    }
+    for (const id of [...html.matchAll(/href="\/#([\w-]+)"/g)].map((m) => m[1])) {
+      assert.match(await (await fetch(base + '/')).text(), new RegExp(`id="${id}"`), `/#${id} exists on the home page`);
+    }
+  }
 
   console.log('Access code tests passed');
 } finally {

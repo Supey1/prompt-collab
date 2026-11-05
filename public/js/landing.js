@@ -1,8 +1,5 @@
-import { bindThemeToggle } from './theme.js';
+import { initSite, esc } from './site.js';
 import { estimateTokens } from '../shared/ot.js';
-import { avatarContent } from './avatar.js';
-
-bindThemeToggle(document.getElementById('themeBtn'));
 
 // After deleting an account, say so instead of silently showing a signed-out page.
 if (new URLSearchParams(location.search).has('deleted')) {
@@ -11,29 +8,8 @@ if (new URLSearchParams(location.search).has('deleted')) {
   history.replaceState(null, '', '/');
 }
 
-// Header: Sign in / Sign up buttons, or who you're signed in as.
-showAccount();
-async function showAccount() {
-  const el = document.getElementById('account');
-  let user = null;
-  try { ({ user } = await (await fetch('/api/me')).json()); } catch { /* offline: show sign-in buttons */ }
-  if (!user) {
-    el.innerHTML = '<a class="btn ghost small" href="/signin">Sign in</a><a class="btn small" href="/signup">Sign up</a>';
-    return;
-  }
-  const badge = user.requests ? `<span class="badge" title="${user.requests} contact request${user.requests > 1 ? 's' : ''}">${user.requests}</span>` : '';
-  el.innerHTML = `<a class="me" href="/account${user.requests ? '#contacts' : ''}" title="Your account (@${esc(user.username)})">
-      <span class="avatar" style="--c:${user.color};margin:0">${avatarContent(user)}</span>${badge}
-      <span class="name">${esc(user.displayName)}</span>
-    </a>
-    <a class="btn ghost small" href="/keys">API keys</a>
-    <button class="btn ghost small" type="button" id="signOut">Sign out</button>`;
-  showMyRooms();
-  document.getElementById('signOut').addEventListener('click', async () => {
-    await fetch('/api/signout', { method: 'POST' }).catch(() => {});
-    location.reload();
-  });
-}
+// Header, then (when signed in) the rooms you're in.
+initSite().then((user) => { if (user) showMyRooms(); });
 
 // "Join a room": accept a full invite link or just the room code.
 const joinDialog = document.getElementById('joinDialog');
@@ -54,7 +30,10 @@ document.getElementById('joinForm').addEventListener('submit', async (e) => {
   if (!/^[a-z0-9-]{3,40}$/.test(id)) return (joinError.textContent = "That doesn't look like a room link or code.");
   joinError.textContent = 'Checking…';
   try {
-    const { exists } = await (await fetch(`/api/rooms/${encodeURIComponent(id)}`)).json();
+    const r = await fetch(`/api/rooms/${encodeURIComponent(id)}`);
+    // Without the access code the server won't say; the room's address asks for the code.
+    if (r.status === 401) { location.href = `/r/${id}`; return; }
+    const { exists } = await r.json();
     if (!exists) return (joinError.textContent = 'No room found with that code. Check it with whoever invited you.');
   } catch {
     return (joinError.textContent = "Couldn't reach the server. Try again.");
@@ -91,7 +70,6 @@ const people = {
   ana: { name: 'Ana', color: '#2f5be8', pos: 0 },
   ben: { name: 'Ben', color: '#c92a62', pos: 0 },
 };
-const esc = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 
 const script = [
   ['ana', 'type', 'Refactor src/auth/middleware.ts so token checks run once per request.'],

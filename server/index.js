@@ -50,7 +50,8 @@ const server = http.createServer(async (req, res) => {
   const me = userFromCookie(req.headers.cookie);
   try {
     // ---- accounts ----
-    if (p === '/privacy') return sendFile(res, path.join(ROOT, 'privacy.html'));
+    // Pages about PromptCollab: public, even while the access code is on.
+    if (INFO_PAGES.includes(p) && p !== '/') return sendFile(res, path.join(ROOT, `${p.slice(1)}.html`));
     if (p === '/signup' || p === '/signin' || p === '/reset') {
       if (me) return redirect(res, safeNext(url.searchParams.get('next')));
       return sendFile(res, path.join(ROOT, `${p.slice(1)}.html`));
@@ -215,7 +216,7 @@ const server = http.createServer(async (req, res) => {
         requested: room.requests.includes(me.id),
       });
     }
-    if (p === '/api/config') return json(res, { accessCodeRequired: !!ACCESS_CODE, lanUrls: lanUrls() });
+    if (p === '/api/config') return json(res, { accessCodeRequired: !!ACCESS_CODE, unlocked: !ACCESS_CODE || hasAccess(req), lanUrls: lanUrls() });
     if (p === '/healthz') return json(res, { ok: true });
 
     const file = path.normalize(path.join(ROOT, p === '/' ? 'index.html' : p));
@@ -347,7 +348,7 @@ function pageMeta(req) {
   const description = room
     ? 'Join your team to write an AI prompt together, live, then send it to any model.'
     : 'Your whole team edits one AI prompt live, like a shared doc, then sends it to GPT, Claude, Gemini or hundreds of open models.';
-  const publicPage = p === '/' || p === '/privacy';
+  const publicPage = INFO_PAGES.includes(p);
   return [
     `<meta name="description" content="${escAttr(description)}">`,
     publicPage ? '' : '<meta name="robots" content="noindex">',
@@ -454,6 +455,7 @@ function allow(map, id, max, windowMs) {
 // What the access cookie holds: a fingerprint of the code, never the code itself.
 // Changing ACCESS_CODE changes it, so everyone is asked for the new code.
 const ACCESS_COOKIE = 'pc_access';
+const INFO_PAGES = ['/', '/about', '/faq', '/privacy'];
 const accessToken = () => crypto.createHmac('sha256', 'promptcollab-access-v1').update(ACCESS_CODE).digest('base64url');
 const sameSecret = (a, b) => {
   const [x, y] = [a, b].map((s) => crypto.createHash('sha256').update(String(s)).digest());
@@ -465,9 +467,11 @@ function hasAccess(req) {
   return !!got && sameSecret(got, accessToken());
 }
 
-// What the code page itself needs (and the privacy page) stays reachable.
+// Without the code, people can still read about PromptCollab (home, about, FAQ,
+// privacy) and load what those pages and the code page need. Accounts, rooms,
+// keys and every other API stay locked.
 function openWithoutCode(p) {
-  return ['/healthz', '/api/config', '/privacy', '/favicon.svg', '/og.png', '/apple-touch-icon.png'].includes(p) ||
+  return [...INFO_PAGES, '/healthz', '/api/config', '/favicon.svg', '/og.png', '/apple-touch-icon.png'].includes(p) ||
     ['/css/', '/js/', '/fonts/', '/vendor/', '/shared/'].some((dir) => p.startsWith(dir));
 }
 
