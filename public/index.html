@@ -8,24 +8,41 @@
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/css/app.css">
 </head>
-<body>
-  <div class="landing">
-    <header>
+<body class="site">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="site-header-inner">
       <a class="logo" href="/">
         <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="5" width="26" height="22" rx="6" fill="currentColor"/><path d="M10 13l4 3-4 3" stroke="var(--paper)" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><rect x="17" y="10" width="2.4" height="12" rx="1.2" fill="#2f5be8"/><rect x="21" y="10" width="2.4" height="12" rx="1.2" fill="#c92a62"/></svg>
         PromptCollab
       </a>
+      <nav class="site-nav" id="siteNav" aria-label="Main">
+        <a href="/#how">How it works</a>
+        <a href="/#features">Features</a>
+        <a href="/faq">FAQ</a>
+        <a href="/about">About</a>
+        <div class="nav-account" id="navAccount"></div>
+      </nav>
       <div class="header-right">
         <div class="account" id="account"></div>
         <button class="icon-btn" id="themeBtn" type="button" aria-label="Toggle dark mode">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
-      </button>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        </button>
+        <button class="icon-btn menu-btn" id="menuBtn" type="button" aria-label="Menu" aria-controls="siteNav" aria-expanded="false">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
       </div>
-    </header>
+    </div>
+  </header>
 
-    <main>
+  <main id="main">
+    <div class="landing">
     <section class="hero">
       <div>
+        <p class="private-note" data-private-note hidden>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+          Private preview: look around freely. Making an account or opening a room needs an access code from the owner.
+        </p>
         <h1>Write the prompt together. Send it to any model.</h1>
         <p>Your whole team edits one prompt live, like a shared doc. When it's right, anyone sends it to GPT, Claude, Gemini or hundreds of open models, and everyone watches the answer arrive.</p>
         <div class="actions">
@@ -56,27 +73,136 @@
       <ul id="recentList"></ul>
     </section>
 
-    <section class="points">
-      <div>
-        <h2>Live co-editing</h2>
-        <p>See teammates' cursors and edits as they type. No more pasting drafts into Slack and merging feedback by hand.</p>
-      </div>
-      <div>
-        <h2>Any model, one place</h2>
-        <p>Switch between providers from one menu. The whole room sees which model is picked and every reply it gives.</p>
-      </div>
-      <div>
-        <h2>One request, not five</h2>
-        <p>The team agrees on a single prompt before sending, so you spend tokens on one good request instead of several half-finished ones.</p>
+    <section class="section reveal" id="how" aria-labelledby="howTitle">
+      <p class="eyebrow">How it works</p>
+      <h2 class="section-title" id="howTitle">From blank page to answer in three steps</h2>
+      <ol class="steps">
+        <li>
+          <span class="step-num" aria-hidden="true">1</span>
+          <h3>Start a room</h3>
+          <p>Give it a name, then share the link or add teammates by username.</p>
+        </li>
+        <li>
+          <span class="step-num" aria-hidden="true">2</span>
+          <h3>Write it together</h3>
+          <p>Everyone types in the same prompt at once and sees each other's cursors, like a shared doc.</p>
+        </li>
+        <li>
+          <span class="step-num" aria-hidden="true">3</span>
+          <h3>Send and read together</h3>
+          <p>Pick a model and press Send. The answer streams in for the whole room, and the conversation stays saved.</p>
+        </li>
+      </ol>
+    </section>
+
+    <section class="section reveal" id="features" aria-labelledby="featuresTitle">
+      <p class="eyebrow">Features</p>
+      <h2 class="section-title" id="featuresTitle">Built for writing prompts as a team</h2>
+      <div class="feature-grid">
+        <div class="feature">
+          <span class="feature-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+          <h3>Live co-editing</h3>
+          <p>See teammates' names, cursors and edits as they type. No more pasting drafts into chat and merging feedback by hand.</p>
+        </div>
+        <div class="feature">
+          <span class="feature-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
+          <h3>Any model, one menu</h3>
+          <p>OpenAI, Anthropic, Google, and hundreds more through OpenRouter. The whole room sees which model is picked.</p>
+        </div>
+        <div class="feature">
+          <span class="feature-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v9H4v-9M2 7h20v5H2zM12 21V7M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg></span>
+          <h3>Free models to start</h3>
+          <p>Try OpenRouter's free models with a free key of your own, or with a few free messages a day when the site offers them.</p>
+        </div>
+        <div class="feature">
+          <span class="feature-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>
+          <h3>Your keys stay yours</h3>
+          <p>API keys are encrypted and never shown again. Your key only pays for the messages you send.</p>
+        </div>
+        <div class="feature">
+          <span class="feature-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></svg></span>
+          <h3>Code and math that read well</h3>
+          <p>Code blocks with a Copy button, tables, LaTeX equations, and export to Markdown when you're done.</p>
+        </div>
+        <div class="feature">
+          <span class="feature-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg></span>
+          <h3>Sharing you control</h3>
+          <p>Rooms start private. Add people by username or open the room to anyone with the link, and approve requests to join.</p>
+        </div>
       </div>
     </section>
-    </main>
 
-    <footer class="site-footer">
-      <span>PromptCollab</span>
-      <a href="/privacy">Privacy</a>
-    </footer>
-  </div>
+    <section class="works-with reveal" aria-label="Works with">
+      <span>Works with</span>
+      <ul>
+        <li>OpenAI</li>
+        <li>Anthropic</li>
+        <li>Google Gemini</li>
+        <li>OpenRouter</li>
+      </ul>
+    </section>
+
+    <section class="section reveal" id="faq" aria-labelledby="faqTitle">
+      <p class="eyebrow">FAQ</p>
+      <h2 class="section-title" id="faqTitle">Common questions</h2>
+      <div class="faq-list">
+        <details>
+          <summary>Is it free?</summary>
+          <div class="answer"><p>PromptCollab itself is free. Paid AI models (like GPT, Claude or Gemini) are billed by the company that runs them, to the API key of whoever presses Send.</p><p>You can also use OpenRouter's free models, which cost nothing, and a built-in demo model that doesn't send anything anywhere.</p></div>
+        </details>
+        <details>
+          <summary>Who pays when someone presses Send?</summary>
+          <div class="answer"><p>The person who presses Send. Their own API key is used for that message, and nobody else's. If you don't have a key for a model, you can't send to it, but you can still edit the prompt and read every answer.</p></div>
+        </details>
+        <details>
+          <summary>Do my teammates need their own keys?</summary>
+          <div class="answer"><p>Only to send. Anyone in the room can write the prompt and read the replies. If one person has a key and the others don't, that person presses Send when the team is ready. Each key only ever pays for its owner's messages.</p></div>
+        </details>
+        <details>
+          <summary>Is my API key safe?</summary>
+          <div class="answer"><p>Keys are encrypted (AES-256-GCM) before they're saved, never shown again after you add them (only the last 4 characters), and never sent to other people's browsers. The site only accepts keys over a secure connection. You can remove a key at any time.</p><p>Tip: set a monthly spending limit on your key in the provider's dashboard, so a mistake can never cost much.</p></div>
+        </details>
+      </div>
+      <p class="more-link"><a href="/faq">See all questions &rarr;</a></p>
+    </section>
+
+    <section class="cta reveal" aria-labelledby="ctaTitle">
+      <h2 id="ctaTitle">Ready to write your first prompt together?</h2>
+      <p>Start a room, send the link to a teammate, and try it with a free model.</p>
+      <div class="actions">
+        <a class="btn" href="/new">Start a room</a>
+        <a class="btn ghost" href="/faq">Read the FAQ</a>
+      </div>
+    </section>
+    </div>
+  </main>
+
+  <footer class="site-footer-big">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <strong>PromptCollab</strong>
+        <p>Write the prompt together. Send it to any model.</p>
+      </div>
+      <nav aria-label="Product">
+        <h2>Product</h2>
+        <a href="/#how">How it works</a>
+        <a href="/#features">Features</a>
+        <a href="/faq">FAQ</a>
+      </nav>
+      <nav aria-label="About">
+        <h2>About</h2>
+        <a href="/about">About PromptCollab</a>
+        <a href="/privacy">Privacy</a>
+      </nav>
+      <nav aria-label="Contact">
+        <h2>Contact</h2>
+        <a href="mailto:supratibh.mondal2027@gmail.com">Email</a>
+        <a href="https://github.com/Supey1" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href="https://www.linkedin.com/in/supratibh-mondal-baa382392/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+      </nav>
+    </div>
+    <p class="footer-fine">Made by Supratibh Mondal · No ads, no trackers</p>
+  </footer>
   <dialog id="joinDialog">
     <form id="joinForm" novalidate>
       <h2>Join a room</h2>
@@ -89,7 +215,6 @@
       </div>
     </form>
   </dialog>
-
   <script type="module" src="/js/landing.js"></script>
 </body>
 </html>
