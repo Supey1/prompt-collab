@@ -19,6 +19,10 @@
   --sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
   --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Logo: black tile in light mode, white tile in dark mode. */
+  --logo-tile: #0b0f17; --logo-arrow: #ffffff; --logo-bar1: #2563eb; --logo-bar2: #7dd3fc;
+  /* Brand accents (glows, progress bar), taken from the logo's blues. */
+  --accent-1: #2563eb; --accent-2: #38bdf8;
   --r-lg: 14px;
   --r-sm: 8px;
   color-scheme: light;
@@ -27,12 +31,14 @@
   :root:not([data-theme="light"]) {
     --paper: #121722; --panel: #1a2130; --ink: #e7ebf3; --ink-2: #aab3c5; --ink-3: #939cb0;
     --line: #2b3447; --wash: #222a3b; --btn: #e7ebf3; --btn-text: #121722; --code-bg: #141a26;
+    --logo-tile: #ffffff; --logo-arrow: #0b0f17; --logo-bar1: #1d4ed8; --logo-bar2: #38bdf8;
     --danger: #ef6b80; --on-danger: #121722; --ok: #34c98a;
     --shadow: 0 1px 0 rgba(0, 0, 0, .2), 0 12px 28px -14px rgba(0, 0, 0, .6);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
+  --logo-tile: #ffffff; --logo-arrow: #0b0f17; --logo-bar1: #1d4ed8; --logo-bar2: #38bdf8;
   --paper: #121722; --panel: #1a2130; --ink: #e7ebf3; --ink-2: #aab3c5; --ink-3: #939cb0;
   --line: #2b3447; --wash: #222a3b; --btn: #e7ebf3; --btn-text: #121722; --code-bg: #141a26;
     --danger: #ef6b80; --on-danger: #121722; --ok: #34c98a;
@@ -358,7 +364,7 @@ kbd { font: 600 12px var(--mono); padding: 3px 7px; border-radius: 6px; border: 
 .tour-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 .tour .btn { background: var(--btn-text); color: var(--btn); }
 .tour .btn.ghost { background: transparent; color: var(--btn-text); border-color: color-mix(in srgb, var(--btn-text) 35%, transparent); }
-.tour-target { outline: 3px solid #3d6bff !important; outline-offset: 3px; border-radius: 10px; position: relative; z-index: 55; }
+.tour-target { outline: 3px solid var(--accent-1) !important; outline-offset: 3px; border-radius: 10px; position: relative; z-index: 55; }
 
 /* privacy page and site footer */
 .prose h2 { font-size: 20px; margin: 32px 0 8px; letter-spacing: -.01em; }
@@ -595,7 +601,7 @@ section[id], .page-head { scroll-margin-top: 80px; }
 /* ---------- home page motion ---------- */
 .site-header { transition: border-color .2s, box-shadow .2s; }
 .site-header.scrolled { border-bottom-color: var(--line); }
-.scroll-progress { position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; transform: scaleX(0); transform-origin: left; background: linear-gradient(90deg, #3d6bff, #e8457c); pointer-events: none; }
+.scroll-progress { position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; transform: scaleX(0); transform-origin: left; background: linear-gradient(90deg, var(--accent-1), var(--accent-2)); pointer-events: none; }
 
 /* hero: glows behind, words rise in, and it drifts away as you scroll */
 .hero { position: relative; }
@@ -603,8 +609,8 @@ section[id], .page-head { scroll-margin-top: 80px; }
    behind the header too, and tall enough that the blur fades out completely. */
 .page-glow { position: absolute; top: 0; left: 0; right: 0; height: 1000px; overflow: hidden; pointer-events: none; z-index: 0; }
 .page-glow span { position: absolute; border-radius: 50%; filter: blur(100px); }
-.page-glow span:first-child { width: 520px; height: 520px; left: calc(50% + 40px); top: 60px; background: #3d6bff; opacity: .2; }
-.page-glow span:last-child { width: 380px; height: 380px; left: calc(50% - 160px); top: 240px; background: #e8457c; opacity: .14; }
+.page-glow span:first-child { width: 520px; height: 520px; left: calc(50% + 40px); top: 60px; background: var(--accent-1); opacity: .2; }
+.page-glow span:last-child { width: 380px; height: 380px; left: calc(50% - 160px); top: 240px; background: var(--accent-2); opacity: .16; }
 .motion .page-glow span:first-child { animation: drift 14s ease-in-out infinite alternate; }
 .motion .page-glow span:last-child { animation: drift 18s ease-in-out infinite alternate-reverse; }
 @keyframes drift { to { translate: -60px 40px; } }
@@ -687,8 +693,8 @@ section[id], .page-head { scroll-margin-top: 80px; }
 
 /* features: lift, plus a glow that follows the pointer */
 .feature { position: relative; overflow: hidden; transition: transform .25s, box-shadow .25s, border-color .25s; }
-.feature::before { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .3s; background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 0), color-mix(in srgb, #3d6bff 16%, transparent), transparent 70%); }
-.feature:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: color-mix(in srgb, #3d6bff 30%, var(--line)); }
+.feature::before { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .3s; background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 0), color-mix(in srgb, var(--accent-1) 16%, transparent), transparent 70%); }
+.feature:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: color-mix(in srgb, var(--accent-1) 30%, var(--line)); }
 .feature:hover::before { opacity: 1; }
 .feature > * { position: relative; }
 
@@ -711,7 +717,7 @@ section[id], .page-head { scroll-margin-top: 80px; }
 @property --angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
 .cta { position: relative; isolation: isolate; }
 .cta::before { content: ''; position: absolute; inset: -1px; border-radius: inherit; padding: 2px; z-index: -1; pointer-events: none;
-  background: conic-gradient(from var(--angle), transparent 0 55%, #3d6bff 75%, #e8457c 90%, transparent 100%);
+  background: conic-gradient(from var(--angle), transparent 0 55%, var(--accent-1) 75%, var(--accent-2) 90%, transparent 100%);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
   animation: spin 5s linear infinite; }
