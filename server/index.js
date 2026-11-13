@@ -398,14 +398,24 @@ function setSecurityHeaders(req, res, p) {
 
 const LOOPBACK = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
 
-// The visitor's address, for rate limits. Behind a Cloudflare Tunnel every request
-// arrives from this computer (where cloudflared runs), so use the address Cloudflare
-// reports instead. That header is only trusted from this computer: anyone else
+// On Railway every request arrives through Railway's edge, which reports the
+// visitor's address in X-Real-IP. Railway sets RAILWAY_* variables itself, so this
+// turns on by itself there. TRUST_REAL_IP=1 does the same behind another proxy
+// that sets X-Real-IP. Never on otherwise: a visitor connecting directly could fake it.
+const BEHIND_PROXY = !!(process.env.RAILWAY_ENVIRONMENT_NAME || process.env.RAILWAY_PROJECT_ID) || process.env.TRUST_REAL_IP === '1';
+const looksLikeIp = (v) => typeof v === 'string' && /^[0-9a-f.:]{2,45}$/i.test(v.trim());
+
+// The visitor's address, for rate limits, so one visitor's wrong guesses don't
+// lock out everyone else. Behind a Cloudflare Tunnel every request arrives from
+// this computer (where cloudflared runs), so use the address Cloudflare reports
+// instead. That header is only trusted from this computer: anyone else
 // connecting directly could fake it.
 function clientIp(req) {
   const direct = req.socket.remoteAddress;
+  const real = req.headers['x-real-ip'];
+  if (BEHIND_PROXY && looksLikeIp(real)) return real.trim();
   const cf = req.headers['cf-connecting-ip'];
-  if (LOOPBACK.includes(direct) && typeof cf === 'string' && /^[0-9a-f.:]{2,45}$/i.test(cf.trim())) return cf.trim();
+  if (LOOPBACK.includes(direct) && looksLikeIp(cf)) return cf.trim();
   return direct;
 }
 

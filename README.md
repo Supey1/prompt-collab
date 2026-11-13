@@ -141,7 +141,7 @@ The address works while both commands run and changes each time you start the tu
 
 ## Deploying
 
-Any host that runs a long-lived Node process with WebSockets works, such as Render, Railway, Fly.io, or a small VPS. Set `KEY_ENCRYPTION_SECRET` (and optionally `ACCESS_CODE`) as environment variables there, serve it over `https://`, and give it a persistent disk for `data/`. Serverless platforms like Vercel or Netlify functions don't keep WebSocket connections open, so they won't work for this app as written.
+Any host that runs a long-lived Node process with WebSockets works, such as Render, Railway, Fly.io, or a small VPS. Set `KEY_ENCRYPTION_SECRET` (and optionally `ACCESS_CODE`) as environment variables there, serve it over `https://`, and give it a persistent disk for `data/` (set `DATA_DIR` to where the disk is mounted, for example `/data`). On Railway, rate limits use the visitor address Railway reports (`X-Real-IP`) automatically. Behind another proxy that sets `X-Real-IP`, set `TRUST_REAL_IP=1`; without it every visitor looks like one address, so one person's wrong guesses lock everyone out. Serverless platforms like Vercel or Netlify functions don't keep WebSocket connections open, so they won't work for this app as written.
 
 ## Tests
 

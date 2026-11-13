@@ -92,6 +92,19 @@ try {
   assert.equal((await post('/api/access', { code: 'a-brand-new-code-77' }, null, visitor('203.0.113.6'))).status, 429, 'that visitor is locked out');
   assert.equal((await post('/api/access', { code: 'a-brand-new-code-77' }, null, visitor('203.0.113.7'))).status, 200, 'others still get in');
 
+  // X-Real-IP is ignored unless the site runs behind a proxy that sets it:
+  // otherwise anyone could fake an address to dodge the limits.
+  assert.equal((await post('/api/access', { code: 'a-brand-new-code-77' }, null, { 'x-real-ip': '198.51.100.9' })).status, 429, 'a faked address does not escape the lockout');
+
+  // On Railway every request comes through Railway's edge, which reports the
+  // visitor in X-Real-IP. Lockouts are per visitor there too.
+  await start('a-brand-new-code-77', { RAILWAY_ENVIRONMENT_NAME: 'production' });
+  const railway = (ip) => ({ 'x-real-ip': ip });
+  for (let i = 0; i < 10; i++) await post('/api/access', { code: `nope-${i}` }, null, railway('198.51.100.1'));
+  assert.equal((await post('/api/access', { code: 'a-brand-new-code-77' }, null, railway('198.51.100.1'))).status, 429, 'on Railway, that visitor is locked out');
+  assert.equal((await post('/api/access', { code: 'a-brand-new-code-77' }, null, railway('198.51.100.2'))).status, 200, 'on Railway, others still get in');
+  assert.equal((await post('/api/access', { code: 'a-brand-new-code-77' }, null, railway('not an address'))).status, 200, 'a junk header falls back to the connection address');
+
   // No code set: the site is open, like before.
   await start('');
   assert.equal((await fetch(base + '/signup')).status, 200);
@@ -117,10 +130,10 @@ try {
   fs.rmSync(dataDir, { recursive: true, force: true });
 }
 
-async function start(code) {
+async function start(code, extraEnv = {}) {
   if (server) { server.kill(); await once(server, 'exit'); }
   server = spawn(process.execPath, ['server/index.js'], {
-    env: { ...process.env, PORT: String(port), DATA_DIR: dataDir, ACCESS_CODE: code, KEY_ENCRYPTION_SECRET: 'test-secret-that-is-long-enough-123', OPENROUTER_HOUSE_KEY: '' },
+    env: { ...process.env, PORT: String(port), DATA_DIR: dataDir, ACCESS_CODE: code, KEY_ENCRYPTION_SECRET: 'test-secret-that-is-long-enough-123', OPENROUTER_HOUSE_KEY: '', RAILWAY_ENVIRONMENT_NAME: '', RAILWAY_PROJECT_ID: '', TRUST_REAL_IP: '', ...extraEnv },
     stdio: ['ignore', 'ignore', 'inherit'],
   });
   for (let i = 0; i < 50; i++) {
